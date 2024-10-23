@@ -221,8 +221,6 @@ contract('Router01V3', function (accounts) {
 		const permitData = await permitGenerator.permit(uniswapV2Pair, borrower, router.address, LP_AMOUNT, DEADLINE);
 		const receipt =  await mintNewCollateral(router, nftlp, borrower, LP_AMOUNT);
 		TOKEN_ID = receipt.returnValue;
-		//TOKEN_ID = await routerLend.mintNewCollateral.call(nftlp.address, LP_AMOUNT, borrower, DEADLINE, permitData, {from: borrower});
-		//await routerLend.mintNewCollateral(nftlp.address, LP_AMOUNT, borrower, DEADLINE, permitData, {from: borrower});
 		expect(await collateral.ownerOf(TOKEN_ID)).to.eq(borrower);
 		expect(await nftlp.liquidity(TOKEN_ID) * 1).to.eq(LP_AMOUNT * 1);
 		
@@ -261,36 +259,28 @@ contract('Router01V3', function (accounts) {
 		const redeemAmount = LP_AMOUNT.div(new BN(5));
 		const permitDataNft1 = await permitGenerator.nftPermit(collateral, borrower, router.address, TOKEN_ID, DEADLINE);
 		await redeemCollateral(router, nftlp, borrower, TOKEN_ID, bnMantissa(0.2));
-		//await routerLend.redeemCollateral(nftlp.address, TOKEN_ID, bnMantissa(0.2), borrower, DEADLINE, permitDataNft1, {from: borrower});
 		expect(await uniswapV2Pair.balanceOf(borrower)*1).to.eq(redeemAmount*1);
 		// Mint new position
 		const permitData1 = await permitGenerator.permit(uniswapV2Pair, borrower, router.address, redeemAmount, DEADLINE);
 		const receipt =  await mintNewCollateral(router, nftlp, borrower, redeemAmount);
 		TOKEN_2 = receipt.returnValue;
-		//const TOKEN_2 = await routerLend.mintNewCollateral.call(nftlp.address, redeemAmount, borrower, DEADLINE, permitData1, {from: borrower});
-		//await routerLend.mintNewCollateral(nftlp.address, redeemAmount, borrower, DEADLINE, permitData1, {from: borrower});
 		expect(await collateral.ownerOf(TOKEN_2)).to.eq(borrower);
 		expect(await nftlp.liquidity(TOKEN_2) * 1).to.eq(redeemAmount * 1);
 		// Redeem 100%
 		const permitDataNft2 = await permitGenerator.nftPermit(collateral, borrower, router.address, TOKEN_2, DEADLINE);
 		await redeemCollateral(router, nftlp, borrower, TOKEN_2, oneMantissa);
-		//await routerLend.redeemCollateral(nftlp.address, TOKEN_2, oneMantissa, borrower, DEADLINE, permitDataNft2, {from: borrower});
 		expect(await uniswapV2Pair.balanceOf(borrower)*1).to.eq(redeemAmount*1);
 		// Mint to old position
 		const permitData2 = await permitGenerator.permit(uniswapV2Pair, borrower, router.address, redeemAmount, DEADLINE);
 		await mintCollateral(router, nftlp, borrower, TOKEN_ID, redeemAmount);
-		//await routerLend.mintCollateral(nftlp.address, TOKEN_ID, redeemAmount, DEADLINE, permitData2, {from: borrower});
 		expect(await nftlp.liquidity(TOKEN_ID) * 1).to.eq(LP_AMOUNT * 1);
 	});
 	
 	it('borrow', async () => {
 		//Borrow UNI
-		//await expectRevert(routerLend.borrow(borrowableUNI.address, TOKEN_ID, UNI_BORROW_AMOUNT, borrower, '0', '0x', {from: borrower}), "ImpermaxRouter: EXPIRED");
-		//await expectRevert(routerLend.borrow(borrowableUNI.address, TOKEN_ID, UNI_BORROW_AMOUNT, borrower, DEADLINE, '0x', {from: borrower}), "ImpermaxV3Borrowable: BORROW_NOT_ALLOWED");
 		await expectRevert(borrow(router, nftlp, borrower, TOKEN_ID, ETH_IS_0 ? 1 : 0, UNI_BORROW_AMOUNT), "ImpermaxV3Borrowable: BORROW_NOT_ALLOWED");
 		const permitBorrowUNI = await permitGenerator.borrowPermit(borrowableUNI, borrower, router.address, UNI_BORROW_AMOUNT, DEADLINE);
 		await borrow(router, nftlp, borrower, TOKEN_ID, ETH_IS_0 ? 1 : 0, UNI_BORROW_AMOUNT);
-		//await routerLend.borrow(borrowableUNI.address, TOKEN_ID, UNI_BORROW_AMOUNT, borrower, DEADLINE, permitBorrowUNI, {from: borrower});
 		expect(await UNI.balanceOf(borrower) * 1).to.eq(UNI_BORROW_AMOUNT * 1);
 		expect(await borrowableUNI.borrowBalance(TOKEN_ID) * 1).to.eq(UNI_BORROW_AMOUNT * 1);
 		
@@ -307,16 +297,11 @@ contract('Router01V3', function (accounts) {
 	
 	it('repay', async () => {
 		//Repay UNI
-		//await expectRevert(routerLend.repay(borrowableUNI.address, TOKEN_ID, UNI_REPAY_AMOUNT1, '0', {from: borrower}), "ImpermaxRouter: EXPIRED");
-		//await expectRevert.unspecified(routerLend.repay(borrowableUNI.address, TOKEN_ID, UNI_REPAY_AMOUNT1, DEADLINE, {from: borrower}));
 		await expectRevert.unspecified(repay(router, nftlp, borrower, TOKEN_ID, ETH_IS_0 ? 1 : 0, UNI_REPAY_AMOUNT1));
 		await UNI.approve(router.address, UNI_REPAY_AMOUNT1, {from: borrower});
-		//const actualRepayUNI = await routerLend.repay.call(borrowableUNI.address, TOKEN_ID, UNI_REPAY_AMOUNT1, DEADLINE, {from: borrower});
-		//expect(actualRepayUNI*1).to.eq(UNI_REPAY_AMOUNT1*1);
 		const expectedUNIBalance = (await UNI.balanceOf(borrower)).sub(UNI_REPAY_AMOUNT1);
 		const expectedUNIBorrowed = (await borrowableUNI.borrowBalance(TOKEN_ID)).sub(UNI_REPAY_AMOUNT1);
 		await repay(router, nftlp, borrower, TOKEN_ID, ETH_IS_0 ? 1 : 0, UNI_REPAY_AMOUNT1);
-		//await routerLend.repay(borrowableUNI.address, TOKEN_ID, UNI_REPAY_AMOUNT1, DEADLINE, {from: borrower});
 		expect(await UNI.balanceOf(borrower) * 1).to.eq(expectedUNIBalance * 1);
 		expectAlmostEqualMantissa(await borrowableUNI.borrowBalance(TOKEN_ID), expectedUNIBorrowed);
 		
@@ -337,12 +322,9 @@ contract('Router01V3', function (accounts) {
 		const borrowedUNI = await borrowableUNI.borrowBalance(TOKEN_ID,);
 		expect(borrowedUNI*1).to.be.lt(UNI_REPAY_AMOUNT2*1);
 		await UNI.approve(router.address, UNI_REPAY_AMOUNT2, {from: borrower});
-		//const actualRepayUNI = await routerLend.repay.call(borrowableUNI.address, TOKEN_ID, UNI_REPAY_AMOUNT2, DEADLINE, {from: borrower});
-		//expectAlmostEqualMantissa(actualRepayUNI, borrowedUNI);
 		const expectedUNIBalance = (await UNI.balanceOf(borrower)).sub(borrowedUNI);
 		const expectedUNIBorrowed = 0;
 		await repay(router, nftlp, borrower, TOKEN_ID, ETH_IS_0 ? 1 : 0, UNI_REPAY_AMOUNT2);
-		//await routerLend.repay(borrowableUNI.address, TOKEN_ID, UNI_REPAY_AMOUNT2, DEADLINE, {from: borrower});
 		expectAlmostEqualMantissa(await UNI.balanceOf(borrower), expectedUNIBalance);
 		expect(await borrowableUNI.borrowBalance(TOKEN_ID,) * 1).to.eq(expectedUNIBorrowed * 1);
 		
