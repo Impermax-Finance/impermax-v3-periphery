@@ -8,7 +8,7 @@ pragma experimental ABIEncoderV2;
 	- and test all approvals
 	- cleanup and check other TODOs
 	- make sure of reentrancy attack through execute
-	- addLiquidity for uniswapV3
+	- AddLiquidityUniV2 for uniswapV3
 	- test uniswapV3
 	- try to merge everything in a single contract
 */
@@ -29,12 +29,13 @@ interface IRouter01V3 {
 		BORROW, 
 		REPAY_USER,
 		REPAY_ROUTER,
-		ADD_LIQUIDITY_INTERNAL, 
-		ADD_LIQUIDITY, 
-		REMOVE_LIQUIDITY,
+		ADD_LIQUIDITY_UNIV2_INTERNAL, 
+		ADD_LIQUIDITY_UNIV2, 
+		REMOVE_LIQUIDITY_UNIV2,
 		WITHDRAW_TOKEN,
+		WITHDRAW_ETH,
 		NO_ACTION,
-		BORROW_AND_ADD_LIQUIDITY
+		BORROW_AND_ADD_LIQUIDITY_UNIV2
 	}
 	struct Action {
 		ActionType actionType;
@@ -48,7 +49,7 @@ interface IRouter01V3 {
 		uint deadline,
 		bytes calldata actionsData,
 		bytes calldata permitsData
-	) external returns (uint tokenId);
+	) external payable returns (uint tokenId);
 	
 	/*** Available actions ***/
 		
@@ -73,18 +74,19 @@ interface IRouter01V3 {
 	) external pure returns (Action memory);
 	function getRepayRouterAction(
 		uint8 index, 
-		uint amountMax
+		uint amountMax,
+		address refundTo
 	) external pure returns (Action memory);
 	
 	// add liquidity
-	function getAddLiquidityAction(
+	function getAddLiquidityUniV2Action(
 		uint amount0Desired, 	// intended as user amount
 		uint amount1Desired, 	// intended as user amount
 		uint amount0Min, 		// intended as user amount
 		uint amount1Min, 		// intended as user amount
 		address to
 	) external pure returns (Action memory);
-	function getBorrowAndAddLiquidityAction(
+	function getBorrowAndAddLiquidityUniV2Action(
 		uint amount0User,
 		uint amount1User,
 		uint amount0Desired,	// intended as user amount + router amount
@@ -95,7 +97,7 @@ interface IRouter01V3 {
 	) external pure returns (Action memory);
 	
 	// remove liquidity
-	function getRemoveLiquidityAction(
+	function getRemoveLiquidityUniV2Action(
 		uint lpAmount,
 		uint amount0Min, 
 		uint amount1Min, 
@@ -105,6 +107,11 @@ interface IRouter01V3 {
 	// withdraw token (for advanced use cases)
 	function getWithdrawTokenAction(
 		address token, 
+		address to
+	) external pure returns (Action memory);
+	
+	// withdraw ETH (expect WETH to be in the contract)
+	function getWithdrawEthAction(
 		address to
 	) external pure returns (Action memory);
 	

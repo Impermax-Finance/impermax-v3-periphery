@@ -15,6 +15,7 @@ const {
 	getAmounts,
 	leverage,
 	mintAndLeverage,
+	mintAndLeverageETH,
 	deleverage,
 	permitGenerator,
 } = require('./Utils/ImpermaxPeriphery');
@@ -97,7 +98,6 @@ contract('Deleverage01xUniswapV2', function (accounts) {
 		nftlp = await TokenizedUniswapV2Position.at(nftlpAddress);
 		await UNI.mint(borrower, UNI_LP_AMOUNT);
 		await UNI.mint(lender, UNI_LEND_AMOUNT);
-		await WETH.deposit({value: ETH_LP_AMOUNT, from: borrower});
 		// Initialize UNI pair
 		await UNI.mint(uniswapV2PairAddress, UNI_LP_AMOUNT);
 		await WETH.deposit({value: ETH_LP_AMOUNT});
@@ -127,17 +127,24 @@ contract('Deleverage01xUniswapV2', function (accounts) {
 		await routerLend.mint(borrowableUNI.address, UNI_LEND_AMOUNT, lender, DEADLINE, {from: lender});
 		//Mint ETH
 		await routerLend.mintETH(borrowableWETH.address, lender, DEADLINE, {value: ETH_LEND_AMOUNT, from: lender});
-		//Mint LP TOOD mintAndLeverage
+		//Mint LP mintAndLeverage
 		await UNI.approve(router.address, UNI_LP_AMOUNT, {from: borrower});
+		const permitBorrowUNI = await permitGenerator.borrowPermit(borrowableUNI, borrower, router.address, UNI_LEVERAGE_AMOUNT, DEADLINE);
+		const permitBorrowETH = await permitGenerator.borrowPermit(borrowableWETH, borrower, router.address, ETH_LEVERAGE_AMOUNT, DEADLINE);
+		/* mintAndLeverageETH */
+		const receipt = await mintAndLeverageETH(router, nftlp, borrower, ETH_LP_AMOUNT, UNI_LP_AMOUNT, ETH_LEVERAGE_AMOUNT.add(ETH_LP_AMOUNT), UNI_LEVERAGE_AMOUNT.add(UNI_LP_AMOUNT), '0', '0', permitBorrowETH, permitBorrowUNI, ETH_IS_A, ETH_IS_A);
+		/* mintAndLeverage
+		await WETH.deposit({value: ETH_LP_AMOUNT, from: borrower});
 		await WETH.approve(router.address, ETH_LP_AMOUNT, {from: borrower});
+		const receipt = await mintAndLeverage(router, nftlp, borrower, ETH_LP_AMOUNT, UNI_LP_AMOUNT, ETH_LEVERAGE_AMOUNT.add(ETH_LP_AMOUNT), UNI_LEVERAGE_AMOUNT.add(UNI_LP_AMOUNT), '0', '0', permitBorrowETH, permitBorrowUNI, ETH_IS_A);
+		*/
+		/* mintNewCollateral and Leverage
 		//const permitData = await permitGenerator.permit(uniswapV2Pair, borrower, routerLend.address, LP_AMOUNT, DEADLINE);
 		//TOKEN_ID = await routerLend.mintNewCollateral.call(nftlp.address, LP_AMOUNT, borrower, DEADLINE, permitData, {from: borrower});
 		//await routerLend.mintNewCollateral(nftlp.address, LP_AMOUNT, borrower, DEADLINE, permitData, {from: borrower});
 		//Leverage
-		const permitBorrowUNI = await permitGenerator.borrowPermit(borrowableUNI, borrower, router.address, UNI_LEVERAGE_AMOUNT, DEADLINE);
-		const permitBorrowETH = await permitGenerator.borrowPermit(borrowableWETH, borrower, router.address, ETH_LEVERAGE_AMOUNT, DEADLINE);
 		//await leverage(router, nftlp, borrower, TOKEN_ID, ETH_LEVERAGE_AMOUNT, UNI_LEVERAGE_AMOUNT, '0', '0', permitBorrowETH, permitBorrowUNI, ETH_IS_A);
-		const receipt = await mintAndLeverage(router, nftlp, borrower, ETH_LP_AMOUNT, UNI_LP_AMOUNT, ETH_LEVERAGE_AMOUNT.add(ETH_LP_AMOUNT), UNI_LEVERAGE_AMOUNT.add(UNI_LP_AMOUNT), '0', '0', permitBorrowETH, permitBorrowUNI, ETH_IS_A);
+		*/
 		TOKEN_ID = receipt.returnValue;
 		LP_AMOUNT = await nftlp.liquidity(TOKEN_ID);
 		console.log(receipt.receipt.gasUsed);
@@ -184,7 +191,7 @@ contract('Deleverage01xUniswapV2', function (accounts) {
 		expectAlmostEqualMantissa(borrowBalanceETHPrior.sub(borrowBalanceETHAfter), ETH_DLVRG_AMOUNT);
 	});
 	
-	it('deleverage with refund UNI', async () => {
+	it('deleverage with refund', async () => {
 		const LP_DLVRG_TOKENS = DLVRG_REFUND_NUM.mul(LP_AMOUNT).div(DLVRG_REFUND_DEN).div(LEVERAGE);
 		const permit = await permitGenerator.nftPermit(collateral, borrower, router.address, TOKEN_ID, DEADLINE);
 		
@@ -196,8 +203,7 @@ contract('Deleverage01xUniswapV2', function (accounts) {
 		console.log(receipt.receipt.gasUsed);		
 		expect(await borrowableWETH.borrowBalance(TOKEN_ID) * 1).to.eq(0);
 		expect(await borrowableUNI.borrowBalance(TOKEN_ID) * 1).to.eq(0);
-		// Todo uncomment this once ETH is supported
-		//expect(ETHBalanceAfter - ETHBalancePrior).to.gt(0);
+		expect(ETHBalanceAfter - ETHBalancePrior).to.gt(0);
 		expect(UNIBalanceAfter.sub(UNIBalancePrior) * 1).to.gt(0);
 	});
 });

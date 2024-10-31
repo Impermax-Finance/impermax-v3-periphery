@@ -17,7 +17,9 @@ const {
 	mintNewCollateral,
 	redeemCollateral,
 	repay,
+	repayETH,
 	borrow,
+	borrowETH,
 	leverage,
 	deleverage,
 	permitGenerator,
@@ -151,8 +153,8 @@ contract('Router01V3', function (accounts) {
 		if (ETH_IS_0) [borrowableWETH, borrowableUNI] = [borrowable0, borrowable1];
 		else [borrowableWETH, borrowableUNI] = [borrowable1, borrowable0]
 		router = await Router01V3.new(impermaxFactory.address, WETH.address);
-		routerLend = await Router01V3.new(impermaxFactory.address, WETH.address);
-		//routerLend = await Router01V3_0.new(impermaxFactory.address, WETH.address);
+		//routerLend = await Router01V3.new(impermaxFactory.address, WETH.address);
+		routerLend = await Router01V3_0.new(impermaxFactory.address, WETH.address);
 		await increaseTime(3700); // wait for oracle to be ready
 		await permitGenerator.initialize();
 	});
@@ -280,19 +282,18 @@ contract('Router01V3', function (accounts) {
 		//Borrow UNI
 		await expectRevert(borrow(router, nftlp, borrower, TOKEN_ID, ETH_IS_0 ? 1 : 0, UNI_BORROW_AMOUNT), "ImpermaxV3Borrowable: BORROW_NOT_ALLOWED");
 		const permitBorrowUNI = await permitGenerator.borrowPermit(borrowableUNI, borrower, router.address, UNI_BORROW_AMOUNT, DEADLINE);
+		//await expectRevert(borrowETH(router, nftlp, borrower, TOKEN_ID, ETH_IS_0 ? 1 : 0, UNI_BORROW_AMOUNT), "ImpermaxRouter: UNEXPECTED_WETH_0_BALANCE");
 		await borrow(router, nftlp, borrower, TOKEN_ID, ETH_IS_0 ? 1 : 0, UNI_BORROW_AMOUNT);
 		expect(await UNI.balanceOf(borrower) * 1).to.eq(UNI_BORROW_AMOUNT * 1);
 		expect(await borrowableUNI.borrowBalance(TOKEN_ID) * 1).to.eq(UNI_BORROW_AMOUNT * 1);
 		
-		//Borrow ETH TODO
-		/*await expectRevert(routerLend.borrowETH(borrowableUNI.address, TOKEN_ID, UNI_BORROW_AMOUNT, borrower, DEADLINE, '0x', {from: borrower}), "ImpermaxRouter: NOT_WETH");
-		await expectRevert(routerLend.borrowETH(borrowableWETH.address, TOKEN_ID, ETH_BORROW_AMOUNT, borrower, '0', '0x', {from: borrower}), "ImpermaxRouter: EXPIRED");
-		await expectRevert(routerLend.borrowETH(borrowableWETH.address, TOKEN_ID, ETH_BORROW_AMOUNT, borrower, DEADLINE, '0x', {from: borrower}), "ImpermaxV3Borrowable: BORROW_NOT_ALLOWED");
-		const permitBorrowETH = await permitGenerator.borrowPermit(borrowableWETH, borrower, routerLend.address, ETH_BORROW_AMOUNT, DEADLINE);
-		const op = routerLend.borrowETH(borrowableWETH.address, TOKEN_ID, ETH_BORROW_AMOUNT, borrower, DEADLINE, permitBorrowETH, {from: borrower});
+		//Borrow ETH
+		await expectRevert(borrowETH(router, nftlp, borrower, TOKEN_ID, ETH_IS_0 ? 0 : 1, ETH_BORROW_AMOUNT), "ImpermaxV3Borrowable: BORROW_NOT_ALLOWED");
+		const permitBorrowETH = await permitGenerator.borrowPermit(borrowableWETH, borrower, router.address, ETH_BORROW_AMOUNT, DEADLINE);
+		const op = borrowETH(router, nftlp, borrower, TOKEN_ID, ETH_IS_0 ? 0 : 1, ETH_BORROW_AMOUNT);
 		await checkETHBalance(op, borrower, ETH_BORROW_AMOUNT);
 		const borrowBalanceETH = ETH_BORROW_AMOUNT.mul(new BN(1001)).div(new BN(1000));
-		expect(await borrowableWETH.borrowBalance(TOKEN_ID) * 1).to.eq(ETH_BORROW_AMOUNT * 1);*/
+		expect(await borrowableWETH.borrowBalance(TOKEN_ID) * 1).to.eq(ETH_BORROW_AMOUNT * 1);
 	});
 	
 	it('repay', async () => {
@@ -305,15 +306,12 @@ contract('Router01V3', function (accounts) {
 		expect(await UNI.balanceOf(borrower) * 1).to.eq(expectedUNIBalance * 1);
 		expectAlmostEqualMantissa(await borrowableUNI.borrowBalance(TOKEN_ID), expectedUNIBorrowed);
 		
-		//Repay ETH TODO
-		/*await expectRevert(routerLend.repayETH(borrowableUNI.address, TOKEN_ID, DEADLINE, {value: ETH_REPAY_AMOUNT1, from: borrower}), "ImpermaxRouter: NOT_WETH");
-		await expectRevert(routerLend.repayETH(borrowableWETH.address, TOKEN_ID, '0', {value: ETH_REPAY_AMOUNT1, from: borrower}), "ImpermaxRouter: EXPIRED");
-		const actualRepayETH = await routerLend.repayETH.call(borrowableWETH.address, TOKEN_ID, DEADLINE, {value: ETH_REPAY_AMOUNT1, from: borrower});
-		expect(actualRepayETH*1).to.eq(ETH_REPAY_AMOUNT1*1);
-		const expectedETHBorrowed = (await borrowableWETH.borrowBalance(TOKEN_ID)).sub(actualRepayETH);
-		const op = routerLend.repayETH(borrowableWETH.address, TOKEN_ID, DEADLINE, {value: ETH_REPAY_AMOUNT1, from: borrower});
-		await checkETHBalance(op, borrower, actualRepayETH, true);
-		expectAlmostEqualMantissa(await borrowableWETH.borrowBalance(TOKEN_ID), expectedETHBorrowed);*/
+		//Repay ETH
+		//await expectRevert(routerLend.repayETH(borrowableUNI.address, TOKEN_ID, DEADLINE, {value: ETH_REPAY_AMOUNT1, from: borrower}), "ImpermaxRouter: NOT_WETH");
+		const expectedETHBorrowed = (await borrowableWETH.borrowBalance(TOKEN_ID)).sub(ETH_REPAY_AMOUNT1);
+		const op = repayETH(router, nftlp, borrower, TOKEN_ID, ETH_IS_0 ? 0 : 1, ETH_REPAY_AMOUNT1);
+		await checkETHBalance(op, borrower, ETH_REPAY_AMOUNT1, true);
+		expectAlmostEqualMantissa(await borrowableWETH.borrowBalance(TOKEN_ID), expectedETHBorrowed);
 	});
 	
 	it('repay exceeding borrowed', async () => {
@@ -329,15 +327,12 @@ contract('Router01V3', function (accounts) {
 		expect(await borrowableUNI.borrowBalance(TOKEN_ID,) * 1).to.eq(expectedUNIBorrowed * 1);
 		
 		//Repay ETH
-		/*
-		const borrowedETH = await borrowableWETH.borrowBalance(TOKEN_ID,);
+		const borrowedETH = await borrowableWETH.borrowBalance(TOKEN_ID);
 		expect(borrowedETH*1).to.be.lt(ETH_REPAY_AMOUNT2*1);
-		const actualRepayETH = await routerLend.repayETH.call(borrowableWETH.address, TOKEN_ID, DEADLINE, {value: ETH_REPAY_AMOUNT2, from: borrower});
-		expectAlmostEqualMantissa(actualRepayETH, borrowedETH);
 		const expectedETHBorrowed = 0;
-		const op = routerLend.repayETH(borrowableWETH.address, TOKEN_ID, DEADLINE, {value: ETH_REPAY_AMOUNT2, from: borrower});
-		await checkETHBalance(op, borrower, actualRepayETH, true);
-		expect(await borrowableWETH.borrowBalance(TOKEN_ID,) * 1).to.eq(expectedETHBorrowed * 1);*/
+		const op = repayETH(router, nftlp, borrower, TOKEN_ID, ETH_IS_0 ? 0 : 1, ETH_REPAY_AMOUNT2);
+		await checkETHBalance(op, borrower, borrowedETH, true);
+		expect(await borrowableWETH.borrowBalance(TOKEN_ID,) * 1).to.eq(expectedETHBorrowed * 1);
 	});
 	
 	it('leverage', async () => {

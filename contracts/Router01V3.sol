@@ -76,35 +76,43 @@ contract Router01V3 is IRouter01V3, IImpermaxCallee {
 		uint amount;
 		address to;
 	}
-	struct RepayData {
+	struct RepayUserData {
 		uint8 index;
 		uint amountMax;
 	}
-	struct AddLiquidityInternalData {
+	struct RepayRouterData {
+		uint8 index;
+		uint amountMax;
+		address refundTo;
+	}
+	struct WithdrawTokenData {
+		address token;
+		address to;
+	}
+	struct WithdrawEthData {
+		address to;
+	}
+	struct AddLiquidityUniV2InternalData {
 		uint amount0User;
 		uint amount1User;
 		uint amount0Router;
 		uint amount1Router;
 		address to;
 	}
-	struct AddLiquidityData {
+	struct AddLiquidityUniV2Data {
 		uint amount0Desired;
 		uint amount1Desired;
 		uint amount0Min;
 		uint amount1Min;
 		address to;
 	}
-	struct RemoveLiquidityData {
+	struct RemoveLiquidityUniV2Data {
 		uint lpAmount;
 		uint amount0Min;
 		uint amount1Min;
 		address to;
 	}
-	struct WithdrawTokenData {
-		address token;
-		address to;
-	}
-	struct BorrowAndAddLiquidityData {
+	struct BorrowAndAddLiquidityUniV2Data {
 		uint amount0User;
 		uint amount1User;
 		uint amount0Desired;
@@ -129,9 +137,7 @@ contract Router01V3 is IRouter01V3, IImpermaxCallee {
 	}
 	
 	/*** Primitive Actions ***/
-	
-	// TODO WHAT ABOUT ETH CONVERSIONS? Maybe create separate primitives?
-	
+		
 	function _mintEmptyPosition(
 		LendingPool memory pool,
 		address to
@@ -215,20 +221,20 @@ contract Router01V3 is IRouter01V3, IImpermaxCallee {
 		LendingPool memory pool,
 		uint8 index,
 		uint tokenId,
-		address msgSender,
-		uint amountMax
+		uint amountMax,
+		address refundTo
 	) internal {
 		address borrowable = pool.borrowables[index];
 		uint routerBalance = IERC20(pool.tokens[index]).balanceOf(address(this));
 		amountMax = Math.min(amountMax, routerBalance);
 		uint repayAmount = _repayAmount(borrowable, tokenId, amountMax);
-		if (routerBalance > repayAmount) TransferHelper.safeTransfer(pool.tokens[index], msgSender, routerBalance - repayAmount);
+		if (routerBalance > repayAmount && refundTo != address(this)) TransferHelper.safeTransfer(pool.tokens[index], refundTo, routerBalance - repayAmount);
 		if (repayAmount == 0) return;
 		TransferHelper.safeTransfer(pool.tokens[index], borrowable, repayAmount);
 		IBorrowable(borrowable).borrow(tokenId, address(0), 0, new bytes(0));
 	}
 	
-	function _addLiquidityInternal(
+	function _addLiquidityUniV2Internal(
 		LendingPool memory pool,
 		uint tokenId,
 		address msgSender,
@@ -238,6 +244,23 @@ contract Router01V3 is IRouter01V3, IImpermaxCallee {
 		uint amount1Router,
 		address to
 	) internal {
+		// adjust amount for ETH
+		// if the user has deposited native ETH, we need to subtract that amount from amountUser and add it to amountRouter
+		int isEth = pool.tokens[0] == WETH ? 0 : pool.tokens[1] == WETH ? int(1) : -1;
+		if (isEth != -1) {
+			uint routerBalance = IERC20(WETH).balanceOf(address(this));
+			if (isEth == 0 && routerBalance > amount0Router) {
+				uint totalEthAmount = amount0User.add(amount0Router);
+				amount0Router = Math.min(totalEthAmount, routerBalance);
+				amount0User = totalEthAmount.sub(amount0Router);
+			}
+			if (isEth == 1 && routerBalance > amount1Router) {
+				uint totalEthAmount = amount1User.add(amount1Router);
+				amount1Router = Math.min(totalEthAmount, routerBalance);
+				amount1User = totalEthAmount.sub(amount1Router);
+			}
+		}
+		
 		// add liquidity to uniswap pair
 		if (amount0User > 0) TransferHelper.safeTransferFrom(pool.tokens[0], msgSender, pool.uniswapV2Pair, amount0User);
 		if (amount1User > 0) TransferHelper.safeTransferFrom(pool.tokens[1], msgSender, pool.uniswapV2Pair, amount1User);
@@ -246,7 +269,7 @@ contract Router01V3 is IRouter01V3, IImpermaxCallee {
 		// mint LP token
 		IUniswapV2Pair(pool.uniswapV2Pair).mint(to);
 	}
-	function _addLiquidity(
+	function _addLiquidityUniV2(
 		LendingPool memory pool,
 		uint tokenId,
 		address msgSender,
@@ -257,10 +280,10 @@ contract Router01V3 is IRouter01V3, IImpermaxCallee {
 		address to
 	) internal {
 		(uint amount0, uint amount1) = _optimalLiquidity(pool.uniswapV2Pair, amount0Desired, amount1Desired, amount0Min, amount1Min);
-		_addLiquidityInternal(pool, tokenId, msgSender, amount0, amount1, 0, 0, to);
+		_addLiquidityUniV2Internal(pool, tokenId, msgSender, amount0, amount1, 0, 0, to);
 	}
 	
-	function _removeLiquidity(
+	function _removeLiquidityUniV2(
 		LendingPool memory pool,
 		address msgSender,
 		uint lpAmount,			// intended as user amount
@@ -280,6 +303,15 @@ contract Router01V3 is IRouter01V3, IImpermaxCallee {
 	) internal {
 		uint routerBalance = IERC20(token).balanceOf(address(this));
 		if (routerBalance > 0) TransferHelper.safeTransfer(token, to, routerBalance);
+	}
+	
+	function _withdrawEth(
+		address to
+	) internal {
+		uint routerBalance = IERC20(WETH).balanceOf(address(this));
+		if (routerBalance == 0) return;
+		IWETH(WETH).withdraw(routerBalance);
+		TransferHelper.safeTransferETH(to, routerBalance);
 	}
 	
 	/*** Action Getters ***/
@@ -318,20 +350,21 @@ contract Router01V3 is IRouter01V3, IImpermaxCallee {
 	}
 	
 	function getRepayUserAction(uint8 index, uint amountMax) public pure returns (Action memory) {
-		return _getAction(ActionType.REPAY_USER, abi.encode(RepayData({
+		return _getAction(ActionType.REPAY_USER, abi.encode(RepayUserData({
 			index: index,
 			amountMax: amountMax
 		})));
 	}
-	function getRepayRouterAction(uint8 index, uint amountMax) public pure returns (Action memory) {
-		return _getAction(ActionType.REPAY_ROUTER, abi.encode(RepayData({
+	function getRepayRouterAction(uint8 index, uint amountMax, address refundTo) public pure returns (Action memory) {
+		return _getAction(ActionType.REPAY_ROUTER, abi.encode(RepayRouterData({
 			index: index,
-			amountMax: amountMax
+			amountMax: amountMax,
+			refundTo: refundTo
 		})));
 	}
 	
-	function getAddLiquidityFixedAction(uint amount0User, uint amount1User, uint amount0Router, uint amount1Router, address to) internal pure returns (Action memory) {
-		return _getAction(ActionType.ADD_LIQUIDITY_INTERNAL, abi.encode(AddLiquidityInternalData({
+	function getAddLiquidityUniV2InternalAction(uint amount0User, uint amount1User, uint amount0Router, uint amount1Router, address to) internal pure returns (Action memory) {
+		return _getAction(ActionType.ADD_LIQUIDITY_UNIV2_INTERNAL, abi.encode(AddLiquidityUniV2InternalData({
 			amount0User: amount0User,
 			amount1User: amount1User,
 			amount0Router: amount0Router,
@@ -339,8 +372,8 @@ contract Router01V3 is IRouter01V3, IImpermaxCallee {
 			to: to
 		})));
 	}
-	function getAddLiquidityAction(uint amount0Desired, uint amount1Desired, uint amount0Min, uint amount1Min, address to) public pure returns (Action memory) {
-		return _getAction(ActionType.ADD_LIQUIDITY, abi.encode(AddLiquidityData({
+	function getAddLiquidityUniV2Action(uint amount0Desired, uint amount1Desired, uint amount0Min, uint amount1Min, address to) public pure returns (Action memory) {
+		return _getAction(ActionType.ADD_LIQUIDITY_UNIV2, abi.encode(AddLiquidityUniV2Data({
 			amount0Desired: amount0Desired,
 			amount1Desired: amount1Desired,
 			amount0Min: amount0Min,
@@ -349,8 +382,8 @@ contract Router01V3 is IRouter01V3, IImpermaxCallee {
 		})));
 	}
 	
-	function getRemoveLiquidityAction(uint lpAmount, uint amount0Min, uint amount1Min, address to) public pure returns (Action memory) {
-		return _getAction(ActionType.REMOVE_LIQUIDITY, abi.encode(RemoveLiquidityData({
+	function getRemoveLiquidityUniV2Action(uint lpAmount, uint amount0Min, uint amount1Min, address to) public pure returns (Action memory) {
+		return _getAction(ActionType.REMOVE_LIQUIDITY_UNIV2, abi.encode(RemoveLiquidityUniV2Data({
 			lpAmount: lpAmount,
 			amount0Min: amount0Min,
 			amount1Min: amount1Min,
@@ -365,9 +398,15 @@ contract Router01V3 is IRouter01V3, IImpermaxCallee {
 		})));
 	}
 	
+	function getWithdrawEthAction(address to) public pure returns (Action memory) {
+		return _getAction(ActionType.WITHDRAW_ETH, abi.encode(WithdrawEthData({
+			to: to
+		})));
+	}
+	
 	/*** Composite Actions ***/
 	
-	function _borrowAndAddLiquidity(
+	function _borrowAndAddLiquidityUniV2(
 		LendingPool memory pool,
 		uint amount0User,
 		uint amount1User,
@@ -382,12 +421,13 @@ contract Router01V3 is IRouter01V3, IImpermaxCallee {
 			amount0 > amount0User ? amount0 - amount0User : 0,
 			amount1 > amount1User ? amount1 - amount1User : 0
 		);
+
 		a = new Action[](3);		
 		a[0] = getBorrowAction(0, amount0Router, address(this));
 		a[1] = getBorrowAction(1, amount1Router, address(this));
-		a[2] = getAddLiquidityFixedAction(amount0 - amount0Router, amount1 - amount1Router, amount0Router, amount1Router, to);
+		a[2] = getAddLiquidityUniV2InternalAction(amount0 - amount0Router, amount1 - amount1Router, amount0Router, amount1Router, to);
 	}
-	function getBorrowAndAddLiquidityAction(
+	function getBorrowAndAddLiquidityUniV2Action(
 		uint amount0User,
 		uint amount1User,
 		uint amount0Desired,	// intended as user amount + router amount
@@ -396,7 +436,7 @@ contract Router01V3 is IRouter01V3, IImpermaxCallee {
 		uint amount1Min,		// intended as user amount + router amount
 		address to
 	) external pure returns (Action memory) {
-		return _getAction(ActionType.BORROW_AND_ADD_LIQUIDITY, abi.encode(BorrowAndAddLiquidityData({
+		return _getAction(ActionType.BORROW_AND_ADD_LIQUIDITY_UNIV2, abi.encode(BorrowAndAddLiquidityUniV2Data({
 			amount0User: amount0User,
 			amount1User: amount1User,
 			amount0Desired: amount0Desired,
@@ -466,7 +506,7 @@ contract Router01V3 is IRouter01V3, IImpermaxCallee {
 			return;
 		}
 		else if (action.actionType == ActionType.REPAY_USER) {
-			RepayData memory decoded = abi.decode(action.actionData, (RepayData));
+			RepayUserData memory decoded = abi.decode(action.actionData, (RepayUserData));
 			_repayUser(
 				pool,
 				decoded.index,
@@ -476,18 +516,18 @@ contract Router01V3 is IRouter01V3, IImpermaxCallee {
 			);
 		}
 		else if (action.actionType == ActionType.REPAY_ROUTER) {
-			RepayData memory decoded = abi.decode(action.actionData, (RepayData));
+			RepayRouterData memory decoded = abi.decode(action.actionData, (RepayRouterData));
 			_repayRouter(
 				pool,
 				decoded.index,
 				tokenId,
-				msgSender,
-				decoded.amountMax
+				decoded.amountMax,
+				decoded.refundTo
 			);
 		}
-		else if (action.actionType == ActionType.ADD_LIQUIDITY_INTERNAL) {
-			AddLiquidityInternalData memory decoded = abi.decode(action.actionData, (AddLiquidityInternalData));
-			_addLiquidityInternal(
+		else if (action.actionType == ActionType.ADD_LIQUIDITY_UNIV2_INTERNAL) {
+			AddLiquidityUniV2InternalData memory decoded = abi.decode(action.actionData, (AddLiquidityUniV2InternalData));
+			_addLiquidityUniV2Internal(
 				pool,
 				tokenId,
 				msgSender,
@@ -498,9 +538,9 @@ contract Router01V3 is IRouter01V3, IImpermaxCallee {
 				decoded.to
 			);
 		}
-		else if (action.actionType == ActionType.ADD_LIQUIDITY) {
-			AddLiquidityData memory decoded = abi.decode(action.actionData, (AddLiquidityData));
-			_addLiquidity(
+		else if (action.actionType == ActionType.ADD_LIQUIDITY_UNIV2) {
+			AddLiquidityUniV2Data memory decoded = abi.decode(action.actionData, (AddLiquidityUniV2Data));
+			_addLiquidityUniV2(
 				pool,
 				tokenId,
 				msgSender,
@@ -511,9 +551,9 @@ contract Router01V3 is IRouter01V3, IImpermaxCallee {
 				decoded.to
 			);
 		}
-		else if (action.actionType == ActionType.REMOVE_LIQUIDITY) {
-			RemoveLiquidityData memory decoded = abi.decode(action.actionData, (RemoveLiquidityData));
-			_removeLiquidity(
+		else if (action.actionType == ActionType.REMOVE_LIQUIDITY_UNIV2) {
+			RemoveLiquidityUniV2Data memory decoded = abi.decode(action.actionData, (RemoveLiquidityUniV2Data));
+			_removeLiquidityUniV2(
 				pool,
 				msgSender,
 				decoded.lpAmount,
@@ -529,9 +569,15 @@ contract Router01V3 is IRouter01V3, IImpermaxCallee {
 				decoded.to
 			);
 		}
-		else if (action.actionType == ActionType.BORROW_AND_ADD_LIQUIDITY) {
-			BorrowAndAddLiquidityData memory decoded = abi.decode(action.actionData, (BorrowAndAddLiquidityData));
-			Action[] memory actions = _borrowAndAddLiquidity(
+		else if (action.actionType == ActionType.WITHDRAW_ETH) {
+			WithdrawEthData memory decoded = abi.decode(action.actionData, (WithdrawEthData));
+			_withdrawEth(
+				decoded.to
+			);
+		}
+		else if (action.actionType == ActionType.BORROW_AND_ADD_LIQUIDITY_UNIV2) {
+			BorrowAndAddLiquidityUniV2Data memory decoded = abi.decode(action.actionData, (BorrowAndAddLiquidityUniV2Data));
+			Action[] memory actions = _borrowAndAddLiquidityUniV2(
 				pool,
 				decoded.amount0User,
 				decoded.amount1User,
@@ -561,7 +607,11 @@ contract Router01V3 is IRouter01V3, IImpermaxCallee {
 		uint deadline,
 		bytes calldata actionsData,
 		bytes calldata permitsData
-	) external ensure(deadline) returns (uint tokenId) {
+	) external payable ensure(deadline) returns (uint tokenId) {
+		if (msg.value > 0) {
+			IWETH(WETH).deposit.value(msg.value)();
+		}
+		
 		LendingPool memory pool = getLendingPool(nftlp);
 		if (_tokenId != uint(-1)) {
 			tokenId = _tokenId;
@@ -580,7 +630,7 @@ contract Router01V3 is IRouter01V3, IImpermaxCallee {
 			_actionsSorter(actions)
 		);
 	}
-		
+	/*
 	function _mint(
 		address poolToken, 
 		address token, 
@@ -662,7 +712,7 @@ contract Router01V3 is IRouter01V3, IImpermaxCallee {
 		seizeTokenId = IBorrowable(borrowable).liquidate(tokenId, amountETH, to, "0x");
 		// refund surpluss eth, if any
 		if (msg.value > amountETH) TransferHelper.safeTransferETH(msg.sender, msg.value - amountETH);
-	}
+	}*/
 	
 	/*** Callbacks ***/
 	
