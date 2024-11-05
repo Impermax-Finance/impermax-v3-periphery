@@ -64,13 +64,6 @@ contract Router01V3 is IRouter01V3, IImpermaxCallee {
 	/*** Data Structures ***/
 	
 	// actions
-	struct MintCollateralData {
-		uint lpAmount;
-	}
-	struct RedeemCollateralData {
-		uint percentage;
-		address to;
-	}
 	struct BorrowData {
 		uint8 index;
 		uint amount;
@@ -92,34 +85,34 @@ contract Router01V3 is IRouter01V3, IImpermaxCallee {
 	struct WithdrawEthData {
 		address to;
 	}
-	struct AddLiquidityUniV2InternalData {
+	struct MintUniV2InternalData {
+		uint lpAmountUser;
 		uint amount0User;
 		uint amount1User;
 		uint amount0Router;
 		uint amount1Router;
-		address to;
 	}
-	struct AddLiquidityUniV2Data {
+	struct MintUniV2Data {
+		uint lpAmountUser;
 		uint amount0Desired;
 		uint amount1Desired;
 		uint amount0Min;
 		uint amount1Min;
-		address to;
 	}
-	struct RemoveLiquidityUniV2Data {
-		uint lpAmount;
+	struct RedeemUniV2Data {
+		uint percentage;
 		uint amount0Min;
 		uint amount1Min;
 		address to;
 	}
-	struct BorrowAndAddLiquidityUniV2Data {
+	struct BorrowAndMintUniV2Data {
+		uint lpAmountUser;
 		uint amount0User;
 		uint amount1User;
 		uint amount0Desired;
 		uint amount1Desired;
 		uint amount0Min;
 		uint amount1Min;
-		address to;
 	}
 	
 	// callbacks
@@ -133,47 +126,13 @@ contract Router01V3 is IRouter01V3, IImpermaxCallee {
 		LendingPool pool;
 		address msgSender;
 		address redeemTo;
+		uint amount0Min;
+		uint amount1Min;
+		ActionType currentAction;
 		Action nextAction;
 	}
 	
 	/*** Primitive Actions ***/
-		
-	function _mintEmptyPosition(
-		LendingPool memory pool,
-		address to
-	) internal returns (uint tokenId) {
-		tokenId = ITokenizedUniswapV2Position(pool.nftlp).mint(pool.collateral);
-		ICollateral(pool.collateral).mint(to, tokenId);
-	}
-	
-	function _mintCollateral(
-		LendingPool memory pool,
-		uint tokenId,
-		address msgSender,
-		uint lpAmount			// intended as user amount
-	) internal {
-		if (lpAmount > 0) TransferHelper.safeTransferFrom(pool.uniswapV2Pair, msgSender, pool.nftlp, lpAmount);
-		uint tokenToJoin = ITokenizedUniswapV2Position(pool.nftlp).mint(address(this));
-		ITokenizedUniswapV2Position(pool.nftlp).join(tokenId, tokenToJoin);
-	}
-	
-	function _redeemCollateral(
-		LendingPool memory pool,
-		uint tokenId,
-		address msgSender,
-		uint percentage,
-		address to,
-		Action memory nextAction
-	) internal {
-		require(percentage > 0, "ImpermaxRouter: REDEEM_ZERO");
-		bytes memory callbackData = abi.encode(RedeemCallbackData({
-			pool: pool,
-			msgSender: msgSender,
-			redeemTo: to,
-			nextAction: nextAction
-		}));
-		ICollateral(pool.collateral).redeem(address(this), tokenId, percentage, callbackData);
-	}
 
 	function _borrow(
 		LendingPool memory pool,
@@ -234,16 +193,41 @@ contract Router01V3 is IRouter01V3, IImpermaxCallee {
 		IBorrowable(borrowable).borrow(tokenId, address(0), 0, new bytes(0));
 	}
 	
-	function _addLiquidityUniV2Internal(
+	function _withdrawToken(
+		address token,
+		address to
+	) internal {
+		uint routerBalance = IERC20(token).balanceOf(address(this));
+		if (routerBalance > 0) TransferHelper.safeTransfer(token, to, routerBalance);
+	}
+	
+	function _withdrawEth(
+		address to
+	) internal {
+		uint routerBalance = IERC20(WETH).balanceOf(address(this));
+		if (routerBalance == 0) return;
+		IWETH(WETH).withdraw(routerBalance);
+		TransferHelper.safeTransferETH(to, routerBalance);
+	}
+	
+	function _mintUniV2Empty(
+		LendingPool memory pool,
+		address to
+	) internal returns (uint tokenId) {
+		tokenId = ITokenizedUniswapV2Position(pool.nftlp).mint(pool.collateral);
+		ICollateral(pool.collateral).mint(to, tokenId);
+	}
+	function _mintUniV2Internal(
 		LendingPool memory pool,
 		uint tokenId,
 		address msgSender,
+		uint lpAmountUser,
 		uint amount0User,
 		uint amount1User,
 		uint amount0Router,
-		uint amount1Router,
-		address to
+		uint amount1Router
 	) internal {
+		address uniswapV2Pair = ITokenizedUniswapV2Position(pool.nftlp).underlying();
 		// adjust amount for ETH
 		// if the user has deposited native ETH, we need to subtract that amount from amountUser and add it to amountRouter
 		int isEth = pool.tokens[0] == WETH ? 0 : pool.tokens[1] == WETH ? int(1) : -1;
@@ -262,56 +246,66 @@ contract Router01V3 is IRouter01V3, IImpermaxCallee {
 		}
 		
 		// add liquidity to uniswap pair
-		if (amount0User > 0) TransferHelper.safeTransferFrom(pool.tokens[0], msgSender, pool.uniswapV2Pair, amount0User);
-		if (amount1User > 0) TransferHelper.safeTransferFrom(pool.tokens[1], msgSender, pool.uniswapV2Pair, amount1User);
-		if (amount0Router > 0) TransferHelper.safeTransfer(pool.tokens[0], pool.uniswapV2Pair, amount0Router);
-		if (amount1Router > 0) TransferHelper.safeTransfer(pool.tokens[1], pool.uniswapV2Pair, amount1Router);
+		if (amount0User > 0) TransferHelper.safeTransferFrom(pool.tokens[0], msgSender, uniswapV2Pair, amount0User);
+		if (amount1User > 0) TransferHelper.safeTransferFrom(pool.tokens[1], msgSender, uniswapV2Pair, amount1User);
+		if (amount0Router > 0) TransferHelper.safeTransfer(pool.tokens[0], uniswapV2Pair, amount0Router);
+		if (amount1Router > 0) TransferHelper.safeTransfer(pool.tokens[1], uniswapV2Pair, amount1Router);
 		// mint LP token
-		IUniswapV2Pair(pool.uniswapV2Pair).mint(to);
+		if (amount0User + amount0Router > 0) IUniswapV2Pair(uniswapV2Pair).mint(pool.nftlp);
+		// mint collateral
+		if (lpAmountUser > 0) TransferHelper.safeTransferFrom(uniswapV2Pair, msgSender, pool.nftlp, lpAmountUser);
+		uint tokenToJoin = ITokenizedUniswapV2Position(pool.nftlp).mint(address(this));
+		ITokenizedUniswapV2Position(pool.nftlp).join(tokenId, tokenToJoin);
 	}
-	function _addLiquidityUniV2(
+	function _mintUniV2(
 		LendingPool memory pool,
 		uint tokenId,
 		address msgSender,
+		uint lpAmountUser,
 		uint amount0Desired,	// intended as user amount
 		uint amount1Desired,	// intended as user amount
 		uint amount0Min,
-		uint amount1Min,
-		address to
+		uint amount1Min
 	) internal {
-		(uint amount0, uint amount1) = _optimalLiquidity(pool.uniswapV2Pair, amount0Desired, amount1Desired, amount0Min, amount1Min);
-		_addLiquidityUniV2Internal(pool, tokenId, msgSender, amount0, amount1, 0, 0, to);
+		address uniswapV2Pair = ITokenizedUniswapV2Position(pool.nftlp).underlying();
+		(uint amount0, uint amount1) = _optimalLiquidity(uniswapV2Pair, amount0Desired, amount1Desired, amount0Min, amount1Min);
+		_mintUniV2Internal(pool, tokenId, msgSender, lpAmountUser, amount0, amount1, 0, 0);
 	}
 	
-	function _removeLiquidityUniV2(
+	function _redeemUniV2Step1(
 		LendingPool memory pool,
+		uint tokenId,
 		address msgSender,
-		uint lpAmount,			// intended as user amount
+		uint percentage,
+		uint amount0Min,
+		uint amount1Min,
+		address to,
+		Action memory nextAction
+	) internal {
+		require(percentage > 0, "ImpermaxRouter: REDEEM_ZERO");
+		bytes memory callbackData = abi.encode(RedeemCallbackData({
+			pool: pool,
+			msgSender: msgSender,
+			redeemTo: to,
+			amount0Min: amount0Min,
+			amount1Min: amount1Min,
+			currentAction: ActionType.REDEEM_UNIV2,
+			nextAction: nextAction
+		}));
+		ICollateral(pool.collateral).redeem(address(this), tokenId, percentage, callbackData);
+	}
+	function _redeemUniV2Step2(
+		LendingPool memory pool,
+		uint redeemTokenId,
 		uint amount0Min,
 		uint amount1Min,
 		address to
 	) internal {
-		if (lpAmount > 0) TransferHelper.safeTransferFrom(pool.uniswapV2Pair, msgSender, pool.uniswapV2Pair, lpAmount);
-		(uint amount0, uint amount1) = IUniswapV2Pair(pool.uniswapV2Pair).burn(to);
+		address uniswapV2Pair = ITokenizedUniswapV2Position(pool.nftlp).underlying();
+		ITokenizedUniswapV2Position(pool.nftlp).redeem(uniswapV2Pair, redeemTokenId);
+		(uint amount0, uint amount1) = IUniswapV2Pair(uniswapV2Pair).burn(to);
 		require(amount0 >= amount0Min, "ImpermaxRouter: INSUFFICIENT_0_AMOUNT");
 		require(amount1 >= amount1Min, "ImpermaxRouter: INSUFFICIENT_1_AMOUNT");
-	}
-	
-	function _withdrawToken(
-		address token,
-		address to
-	) internal {
-		uint routerBalance = IERC20(token).balanceOf(address(this));
-		if (routerBalance > 0) TransferHelper.safeTransfer(token, to, routerBalance);
-	}
-	
-	function _withdrawEth(
-		address to
-	) internal {
-		uint routerBalance = IERC20(WETH).balanceOf(address(this));
-		if (routerBalance == 0) return;
-		IWETH(WETH).withdraw(routerBalance);
-		TransferHelper.safeTransferETH(to, routerBalance);
 	}
 	
 	/*** Action Getters ***/
@@ -326,19 +320,6 @@ contract Router01V3 is IRouter01V3, IImpermaxCallee {
 	
 	function getNoAction() internal pure returns (Action memory) {
 		return _getAction(ActionType.NO_ACTION, bytes(""));
-	}
-	
-	function getMintCollateralAction(uint lpAmount) public pure returns (Action memory) {
-		return _getAction(ActionType.MINT_COLLATERAL, abi.encode(MintCollateralData({
-			lpAmount: lpAmount
-		})));
-	}
-	
-	function getRedeemCollateralAction(uint percentage, address to) public pure returns (Action memory) {
-		return _getAction(ActionType.REDEEM_COLLATERAL, abi.encode(RedeemCollateralData({
-			percentage: percentage,
-			to: to
-		})));
 	}
 	
 	function getBorrowAction(uint8 index, uint amount, address to) public pure returns (Action memory) {
@@ -363,34 +344,6 @@ contract Router01V3 is IRouter01V3, IImpermaxCallee {
 		})));
 	}
 	
-	function getAddLiquidityUniV2InternalAction(uint amount0User, uint amount1User, uint amount0Router, uint amount1Router, address to) internal pure returns (Action memory) {
-		return _getAction(ActionType.ADD_LIQUIDITY_UNIV2_INTERNAL, abi.encode(AddLiquidityUniV2InternalData({
-			amount0User: amount0User,
-			amount1User: amount1User,
-			amount0Router: amount0Router,
-			amount1Router: amount1Router,
-			to: to
-		})));
-	}
-	function getAddLiquidityUniV2Action(uint amount0Desired, uint amount1Desired, uint amount0Min, uint amount1Min, address to) public pure returns (Action memory) {
-		return _getAction(ActionType.ADD_LIQUIDITY_UNIV2, abi.encode(AddLiquidityUniV2Data({
-			amount0Desired: amount0Desired,
-			amount1Desired: amount1Desired,
-			amount0Min: amount0Min,
-			amount1Min: amount1Min,
-			to: to
-		})));
-	}
-	
-	function getRemoveLiquidityUniV2Action(uint lpAmount, uint amount0Min, uint amount1Min, address to) public pure returns (Action memory) {
-		return _getAction(ActionType.REMOVE_LIQUIDITY_UNIV2, abi.encode(RemoveLiquidityUniV2Data({
-			lpAmount: lpAmount,
-			amount0Min: amount0Min,
-			amount1Min: amount1Min,
-			to: to
-		})));
-	}
-	
 	function getWithdrawTokenAction(address token, address to) public pure returns (Action memory) {
 		return _getAction(ActionType.WITHDRAW_TOKEN, abi.encode(WithdrawTokenData({
 			token: token,
@@ -404,19 +357,48 @@ contract Router01V3 is IRouter01V3, IImpermaxCallee {
 		})));
 	}
 	
+	function getMintUniV2InternalAction(uint lpAmountUser, uint amount0User, uint amount1User, uint amount0Router, uint amount1Router) internal pure returns (Action memory) {
+		return _getAction(ActionType.MINT_UNIV2_INTERNAL, abi.encode(MintUniV2InternalData({
+			lpAmountUser: lpAmountUser,
+			amount0User: amount0User,
+			amount1User: amount1User,
+			amount0Router: amount0Router,
+			amount1Router: amount1Router
+		})));
+	}
+	function getMintUniV2Action(uint lpAmountUser, uint amount0Desired, uint amount1Desired, uint amount0Min, uint amount1Min) public pure returns (Action memory) {
+		return _getAction(ActionType.MINT_UNIV2, abi.encode(MintUniV2Data({
+			lpAmountUser: lpAmountUser,
+			amount0Desired: amount0Desired,
+			amount1Desired: amount1Desired,
+			amount0Min: amount0Min,
+			amount1Min: amount1Min
+		})));
+	}
+	
+	function getRedeemUniV2Action(uint percentage, uint amount0Min, uint amount1Min, address to) public pure returns (Action memory) {
+		return _getAction(ActionType.REDEEM_UNIV2, abi.encode(RedeemUniV2Data({
+			percentage: percentage,
+			amount0Min: amount0Min,
+			amount1Min: amount1Min,
+			to: to
+		})));
+	}
+	
 	/*** Composite Actions ***/
 	
-	function _borrowAndAddLiquidityUniV2(
+	function _borrowAndMintUniV2(
 		LendingPool memory pool,
+		uint lpAmountUser,
 		uint amount0User,
 		uint amount1User,
 		uint amount0Desired,	// intended as user amount + router amount
 		uint amount1Desired,	// intended as user amount + router amount
 		uint amount0Min,		// intended as user amount + router amount
-		uint amount1Min,		// intended as user amount + router amount
-		address to
+		uint amount1Min			// intended as user amount + router amount
 	) internal view returns (Action[] memory a) {
-		(uint amount0, uint amount1) = _optimalLiquidity(pool.uniswapV2Pair, amount0Desired, amount1Desired, amount0Min, amount1Min);
+		address uniswapV2Pair = ITokenizedUniswapV2Position(pool.nftlp).underlying();
+		(uint amount0, uint amount1) = _optimalLiquidity(uniswapV2Pair, amount0Desired, amount1Desired, amount0Min, amount1Min);
 		(uint amount0Router, uint amount1Router) = (
 			amount0 > amount0User ? amount0 - amount0User : 0,
 			amount1 > amount1User ? amount1 - amount1User : 0
@@ -425,25 +407,25 @@ contract Router01V3 is IRouter01V3, IImpermaxCallee {
 		a = new Action[](3);		
 		a[0] = getBorrowAction(0, amount0Router, address(this));
 		a[1] = getBorrowAction(1, amount1Router, address(this));
-		a[2] = getAddLiquidityUniV2InternalAction(amount0 - amount0Router, amount1 - amount1Router, amount0Router, amount1Router, to);
+		a[2] = getMintUniV2InternalAction(lpAmountUser, amount0 - amount0Router, amount1 - amount1Router, amount0Router, amount1Router);
 	}
-	function getBorrowAndAddLiquidityUniV2Action(
+	function getBorrowAndMintUniV2Action(
+		uint lpAmountUser,
 		uint amount0User,
 		uint amount1User,
 		uint amount0Desired,	// intended as user amount + router amount
 		uint amount1Desired,	// intended as user amount + router amount
 		uint amount0Min,		// intended as user amount + router amount
-		uint amount1Min,		// intended as user amount + router amount
-		address to
+		uint amount1Min			// intended as user amount + router amount
 	) external pure returns (Action memory) {
-		return _getAction(ActionType.BORROW_AND_ADD_LIQUIDITY_UNIV2, abi.encode(BorrowAndAddLiquidityUniV2Data({
+		return _getAction(ActionType.BORROW_AND_MINT_UNIV2, abi.encode(BorrowAndMintUniV2Data({
+			lpAmountUser: lpAmountUser,
 			amount0User: amount0User,
 			amount1User: amount1User,
 			amount0Desired: amount0Desired,
 			amount1Desired: amount1Desired,
 			amount0Min: amount0Min,
-			amount1Min: amount1Min,
-			to: to
+			amount1Min: amount1Min
 		})));
 	}
 	
@@ -471,28 +453,7 @@ contract Router01V3 is IRouter01V3, IImpermaxCallee {
 	) internal {
 		if (action.actionType == ActionType.NO_ACTION) return;
 		Action memory nextAction = abi.decode(action.nextAction, (Action));
-		if (action.actionType == ActionType.MINT_COLLATERAL) {
-			MintCollateralData memory decoded = abi.decode(action.actionData, (MintCollateralData));
-			_mintCollateral(
-				pool,
-				tokenId,
-				msgSender,
-				decoded.lpAmount
-			);
-		}
-		else if (action.actionType == ActionType.REDEEM_COLLATERAL) {
-			RedeemCollateralData memory decoded = abi.decode(action.actionData, (RedeemCollateralData));
-			_redeemCollateral(
-				pool,
-				tokenId,
-				msgSender,
-				decoded.percentage,
-				decoded.to,
-				nextAction
-			);
-			return;
-		}
-		else if (action.actionType == ActionType.BORROW) {
+		if (action.actionType == ActionType.BORROW) {
 			BorrowData memory decoded = abi.decode(action.actionData, (BorrowData));
 			_borrow(
 				pool,
@@ -525,43 +486,6 @@ contract Router01V3 is IRouter01V3, IImpermaxCallee {
 				decoded.refundTo
 			);
 		}
-		else if (action.actionType == ActionType.ADD_LIQUIDITY_UNIV2_INTERNAL) {
-			AddLiquidityUniV2InternalData memory decoded = abi.decode(action.actionData, (AddLiquidityUniV2InternalData));
-			_addLiquidityUniV2Internal(
-				pool,
-				tokenId,
-				msgSender,
-				decoded.amount0User,
-				decoded.amount1User,
-				decoded.amount0Router,
-				decoded.amount1Router,
-				decoded.to
-			);
-		}
-		else if (action.actionType == ActionType.ADD_LIQUIDITY_UNIV2) {
-			AddLiquidityUniV2Data memory decoded = abi.decode(action.actionData, (AddLiquidityUniV2Data));
-			_addLiquidityUniV2(
-				pool,
-				tokenId,
-				msgSender,
-				decoded.amount0Desired,
-				decoded.amount1Desired,
-				decoded.amount0Min,
-				decoded.amount1Min,
-				decoded.to
-			);
-		}
-		else if (action.actionType == ActionType.REMOVE_LIQUIDITY_UNIV2) {
-			RemoveLiquidityUniV2Data memory decoded = abi.decode(action.actionData, (RemoveLiquidityUniV2Data));
-			_removeLiquidityUniV2(
-				pool,
-				msgSender,
-				decoded.lpAmount,
-				decoded.amount0Min,
-				decoded.amount1Min,
-				decoded.to
-			);
-		}
 		else if (action.actionType == ActionType.WITHDRAW_TOKEN) {
 			WithdrawTokenData memory decoded = abi.decode(action.actionData, (WithdrawTokenData));
 			_withdrawToken(
@@ -575,17 +499,57 @@ contract Router01V3 is IRouter01V3, IImpermaxCallee {
 				decoded.to
 			);
 		}
-		else if (action.actionType == ActionType.BORROW_AND_ADD_LIQUIDITY_UNIV2) {
-			BorrowAndAddLiquidityUniV2Data memory decoded = abi.decode(action.actionData, (BorrowAndAddLiquidityUniV2Data));
-			Action[] memory actions = _borrowAndAddLiquidityUniV2(
+		else if (action.actionType == ActionType.MINT_UNIV2_INTERNAL) {
+			MintUniV2InternalData memory decoded = abi.decode(action.actionData, (MintUniV2InternalData));
+			_mintUniV2Internal(
 				pool,
+				tokenId,
+				msgSender,
+				decoded.lpAmountUser,
+				decoded.amount0User,
+				decoded.amount1User,
+				decoded.amount0Router,
+				decoded.amount1Router
+			);
+		}
+		else if (action.actionType == ActionType.MINT_UNIV2) {
+			MintUniV2Data memory decoded = abi.decode(action.actionData, (MintUniV2Data));
+			_mintUniV2(
+				pool,
+				tokenId,
+				msgSender,
+				decoded.lpAmountUser,
+				decoded.amount0Desired,
+				decoded.amount1Desired,
+				decoded.amount0Min,
+				decoded.amount1Min
+			);
+		}
+		else if (action.actionType == ActionType.REDEEM_UNIV2) {
+			RedeemUniV2Data memory decoded = abi.decode(action.actionData, (RedeemUniV2Data));
+			_redeemUniV2Step1(
+				pool,
+				tokenId,
+				msgSender,
+				decoded.percentage,
+				decoded.amount0Min,
+				decoded.amount1Min,
+				decoded.to,
+				nextAction
+			);
+			return;
+		}
+		else if (action.actionType == ActionType.BORROW_AND_MINT_UNIV2) {
+			BorrowAndMintUniV2Data memory decoded = abi.decode(action.actionData, (BorrowAndMintUniV2Data));
+			Action[] memory actions = _borrowAndMintUniV2(
+				pool,
+				decoded.lpAmountUser,
 				decoded.amount0User,
 				decoded.amount1User,
 				decoded.amount0Desired,
 				decoded.amount1Desired,
 				decoded.amount0Min,
-				decoded.amount1Min,
-				decoded.to
+				decoded.amount1Min
 			);
 			nextAction = _actionsSorter(actions, nextAction);
 		}
@@ -611,17 +575,20 @@ contract Router01V3 is IRouter01V3, IImpermaxCallee {
 		if (msg.value > 0) {
 			IWETH(WETH).deposit.value(msg.value)();
 		}
+		// TODO execute all permits HERE
+			
+		Action[] memory actions = abi.decode(actionsData, (Action[]));
 		
 		LendingPool memory pool = getLendingPool(nftlp);
+		uint tokenId;
 		if (_tokenId != uint(-1)) {
 			tokenId = _tokenId;
 			_checkOwnerNftlp(nftlp, tokenId);
 		} else {
-			tokenId = _mintEmptyPosition(pool, msg.sender);
+			if (actions[0].actionType == ActionType.MINT_UNIV2 || actions[0].actionType == ActionType.BORROW_AND_MINT_UNIV2)
+				tokenId = _mintUniV2Empty(pool, msg.sender);
+			else revert("ImpermaxRouter: INVALID_FIRST_ACTION");
 		}
-		// TODO execute all permits HERE
-			
-		Action[] memory actions = abi.decode(actionsData, (Action[]));
 			
 		_execute(
 			pool,
@@ -745,7 +712,13 @@ contract Router01V3 is IRouter01V3, IImpermaxCallee {
 		require(msg.sender == declaredCaller, "ImpermaxRouter: UNAUTHORIZED_CALLER");
 		
 		// only nftlp accepted -> first thing, redeem for lp tokens
-		ITokenizedUniswapV2Position(callbackData.pool.nftlp).redeem(callbackData.redeemTo, redeemTokenId);
+		if (callbackData.currentAction == ActionType.REDEEM_UNIV2) _redeemUniV2Step2(
+			callbackData.pool,
+			redeemTokenId,
+			callbackData.amount0Min,
+			callbackData.amount1Min,
+			callbackData.redeemTo
+		);
 		
 		_execute(
 			callbackData.pool,
@@ -802,6 +775,7 @@ contract Router01V3 is IRouter01V3, IImpermaxCallee {
 		uint amount0Min,
 		uint amount1Min
 	) public view returns (uint amount0, uint amount1) {
+		if (amount0Desired == 0) return (0, 0);
 		(uint reserveA, uint reserveB,) = IUniswapV2Pair(uniswapV2Pair).getReserves();
 		uint amount1Optimal = UniswapV2Library.quote(amount0Desired, reserveA, reserveB);
 		if (amount1Optimal <= amount1Desired) {
@@ -828,7 +802,6 @@ contract Router01V3 is IRouter01V3, IImpermaxCallee {
 		pool.nftlp = nftlp;
 		(,,pool.collateral,pool.borrowables[0],pool.borrowables[1]) = 
 			IFactory(factory).getLendingPool(nftlp);
-		pool.uniswapV2Pair = ITokenizedUniswapV2Position(nftlp).underlying();
 		pool.tokens[0] = IBorrowable(pool.borrowables[0]).underlying();
 		pool.tokens[1] = IBorrowable(pool.borrowables[1]).underlying();
 	}

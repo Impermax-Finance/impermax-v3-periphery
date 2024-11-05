@@ -1,6 +1,7 @@
 const {
 	bnMantissa,
 	BN,
+	expectEvent,
 } = require('./JS');
 const {
 	address,
@@ -39,14 +40,6 @@ function encodeActions(actions = []) {
 }
 
 async function execute(router, nftlp, from, tokenId, actions, value = 0) {
-	const returnValue = await router.execute.call(
-		nftlp.address, 
-		tokenId,
-		DEADLINE,
-		actions,
-		"0x",
-		{from, value}
-	);
 	const receipt = await router.execute(
 		nftlp.address, 
 		tokenId,
@@ -55,16 +48,37 @@ async function execute(router, nftlp, from, tokenId, actions, value = 0) {
 		"0x",
 		{from, value}
 	);
-	receipt.returnValue = returnValue;
+	receipt.tokenId = tokenId;
+	const lendingPool = await router.getLendingPool(nftlp.address);
+	const eventSignature = keccak256(toUtf8Bytes("Transfer(address,address,uint256)"));
+	for (const rawLog of receipt.receipt.rawLogs) {
+		if (rawLog.topics[0] != eventSignature) continue;
+		if (rawLog.address.toLowerCase() != lendingPool.collateral.toLowerCase()) continue;
+		if (rawLog.topics[1] != '0x0000000000000000000000000000000000000000000000000000000000000000') continue;
+		if (rawLog.topics[2].slice(26) != from.slice(2).toLowerCase()) continue;
+		receipt.tokenId = new BN(Number(rawLog.topics[3].toString()));
+	}
 	return receipt;
 }
 
-async function mintCollateral(router, nftlp, borrower, tokenId, lpAmount) {
+async function mintCollateral(router, nftlp, borrower, tokenId, lpAmount, amountADesired = 0, amountBDesired = 0, amountAMin = 0, amountBMin = 0, A_IS_0 = true) {
+	const t = getAmounts({amountADesired, amountBDesired, amountAMin, amountBMin}, A_IS_0);
 	const actions = encodeActions([
-		await router.getMintCollateralAction(lpAmount)
+		await router.getMintUniV2Action(lpAmount, t.amount0Desired, t.amount1Desired, t.amount0Min, t.amount1Min)
 	]);
 	
 	return execute(router, nftlp, borrower, tokenId, actions);
+}
+
+async function mintCollateralETH(router, nftlp, borrower, tokenId, lpAmount, amountADesired, amountBDesired, amountAMin, amountBMin, A_IS_0, ETH_IS_0) {
+	const t = getAmounts({amountADesired, amountBDesired, amountAMin, amountBMin}, A_IS_0);
+	let amountETH = ETH_IS_0 ? t.amount0Desired : t.amount1Desired;
+	const actions = encodeActions([
+		await router.getMintUniV2Action(lpAmount, t.amount0Desired, t.amount1Desired, t.amount0Min, t.amount1Min),
+		await router.getWithdrawEthAction(borrower)
+	]);
+	
+	return execute(router, nftlp, borrower, tokenId, actions, amountETH);
 }
 
 async function mintNewCollateral(router, nftlp, borrower, lpAmount) {
@@ -73,7 +87,19 @@ async function mintNewCollateral(router, nftlp, borrower, lpAmount) {
 
 async function redeemCollateral(router, nftlp, borrower, tokenId, percentage) {
 	const actions = encodeActions([
-		await router.getRedeemCollateralAction(percentage, borrower)
+		await router.getRedeemUniV2Action(percentage, 0, 0, borrower)
+	]);
+	
+	return execute(router, nftlp, borrower, tokenId, actions);
+}
+
+async function redeemCollateralETH(router, nftlp, borrower, tokenId, percentage, ETH_IS_0) {
+	const lendingPool = await router.getLendingPool(nftlp.address);
+	const tokenToWithdraw = ETH_IS_0 ? lendingPool.tokens[1] : lendingPool.tokens[0];
+	const actions = encodeActions([
+		await router.getRedeemUniV2Action(percentage, 0, 0, router.address),
+		await router.getWithdrawEthAction(borrower),
+		await router.getWithdrawTokenAction(tokenToWithdraw, borrower)
 	]);
 	
 	return execute(router, nftlp, borrower, tokenId, actions);
@@ -126,8 +152,7 @@ async function leverage(router, nftlp, borrower, tokenId, amountADesired, amount
 		await router.getMintCollateralAction(0),
 		await router.getWithdrawTokenAction(lendingPool.tokens[0], lendingPool.borrowables[0]),
 		await router.getWithdrawTokenAction(lendingPool.tokens[1], lendingPool.borrowables[1])*/
-		await router.getBorrowAndAddLiquidityUniV2Action(0, 0, t.amount0Desired, t.amount1Desired, t.amount0Min, t.amount1Min, nftlp.address),
-		await router.getMintCollateralAction(0)
+		await router.getBorrowAndMintUniV2Action(0, 0, 0, t.amount0Desired, t.amount1Desired, t.amount0Min, t.amount1Min),
 	]);
 	
 	return execute(router, nftlp, borrower, tokenId, actions);
@@ -145,8 +170,7 @@ async function mintAndLeverage(router, nftlp, borrower, amountAUser, amountBUser
 		await router.getMintCollateralAction(0),
 		await router.getWithdrawTokenAction(lendingPool.tokens[0], lendingPool.borrowables[0]),
 		await router.getWithdrawTokenAction(lendingPool.tokens[1], lendingPool.borrowables[1])*/
-		await router.getBorrowAndAddLiquidityUniV2Action(t.amount0User, t.amount1User, t.amount0Desired, t.amount1Desired, t.amount0Min, t.amount1Min, nftlp.address),
-		await router.getMintCollateralAction(0)
+		await router.getBorrowAndMintUniV2Action(0, t.amount0User, t.amount1User, t.amount0Desired, t.amount1Desired, t.amount0Min, t.amount1Min),
 	]);
 	
 	return execute(router, nftlp, borrower, MAX_UINT_256, actions);
@@ -166,8 +190,7 @@ async function mintAndLeverageETH(router, nftlp, borrower, amountAUser, amountBU
 		await router.getMintCollateralAction(0),
 		await router.getWithdrawTokenAction(lendingPool.tokens[0], lendingPool.borrowables[0]),
 		await router.getWithdrawTokenAction(lendingPool.tokens[1], lendingPool.borrowables[1])*/
-		await router.getBorrowAndAddLiquidityUniV2Action(t.amount0User, t.amount1User, t.amount0Desired, t.amount1Desired, t.amount0Min, t.amount1Min, nftlp.address),
-		await router.getMintCollateralAction(0),
+		await router.getBorrowAndMintUniV2Action(0, t.amount0User, t.amount1User, t.amount0Desired, t.amount1Desired, t.amount0Min, t.amount1Min),
 		await router.getWithdrawEthAction(borrower)	// refund only needed if we're not borrowing ETH
 	]);
 	
@@ -191,8 +214,7 @@ async function deleverage(router, nftlp, borrower, tokenId, redeemTokens, amount
 	const ETH_IS_0 = WETH == lendingPool.tokens[0];
 	const ETH_IS_1 = WETH == lendingPool.tokens[1];
 	const tmpActions = [
-		await router.getRedeemCollateralAction(percentage, lendingPool.uniswapV2Pair),
-		await router.getRemoveLiquidityUniV2Action(0, t.amount0Min, t.amount1Min, router.address),
+		await router.getRedeemUniV2Action(percentage, t.amount0Min, t.amount1Min, router.address),
 		await router.getRepayRouterAction(0, MAX_UINT_256, ETH_IS_0 ? router.address : borrower),
 		await router.getRepayRouterAction(1, MAX_UINT_256, ETH_IS_1 ? router.address : borrower)
 	];
@@ -323,8 +345,10 @@ module.exports = {
 	MAX_UINT_256,
 	getAmounts,
 	mintCollateral,
+	mintCollateralETH,
 	mintNewCollateral,
 	redeemCollateral,
+	redeemCollateralETH,
 	borrow,
 	borrowETH,
 	repay,

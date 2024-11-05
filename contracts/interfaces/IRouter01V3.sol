@@ -15,7 +15,6 @@ pragma experimental ABIEncoderV2;
 
 interface IRouter01V3 {
 	struct LendingPool {
-		address uniswapV2Pair;
 		address nftlp;
 		address collateral;
 		address[2] borrowables;
@@ -24,18 +23,20 @@ interface IRouter01V3 {
 	function getLendingPool(address nftlp) external view returns (LendingPool memory pool);
 		
 	enum ActionType {
-		MINT_COLLATERAL,
-		REDEEM_COLLATERAL, 
 		BORROW, 
 		REPAY_USER,
 		REPAY_ROUTER,
-		ADD_LIQUIDITY_UNIV2_INTERNAL, 
-		ADD_LIQUIDITY_UNIV2, 
-		REMOVE_LIQUIDITY_UNIV2,
 		WITHDRAW_TOKEN,
 		WITHDRAW_ETH,
 		NO_ACTION,
-		BORROW_AND_ADD_LIQUIDITY_UNIV2
+		MINT_UNIV2_INTERNAL, 
+		MINT_UNIV2, 
+		REDEEM_UNIV2,
+		BORROW_AND_MINT_UNIV2
+		//ADD_LIQUIDITY_UNIV3_INTERNAL, 
+		//ADD_LIQUIDITY_UNIV3, 
+		//REMOVE_LIQUIDITY_UNIV3,
+		//BORROW_AND_ADD_LIQUIDITY_UNIV3
 	}
 	struct Action {
 		ActionType actionType;
@@ -52,13 +53,6 @@ interface IRouter01V3 {
 	) external payable returns (uint tokenId);
 	
 	/*** Available actions ***/
-		
-	// mint/redeem
-	function getMintCollateralAction(uint lpAmount) external pure returns (Action memory);
-	function getRedeemCollateralAction(
-		uint percentage, 
-		address to
-	) external pure returns (Action memory);
 	
 	// borrow
 	function getBorrowAction(
@@ -78,32 +72,6 @@ interface IRouter01V3 {
 		address refundTo
 	) external pure returns (Action memory);
 	
-	// add liquidity
-	function getAddLiquidityUniV2Action(
-		uint amount0Desired, 	// intended as user amount
-		uint amount1Desired, 	// intended as user amount
-		uint amount0Min, 		// intended as user amount
-		uint amount1Min, 		// intended as user amount
-		address to
-	) external pure returns (Action memory);
-	function getBorrowAndAddLiquidityUniV2Action(
-		uint amount0User,
-		uint amount1User,
-		uint amount0Desired,	// intended as user amount + router amount
-		uint amount1Desired,	// intended as user amount + router amount
-		uint amount0Min,		// intended as user amount + router amount
-		uint amount1Min,		// intended as user amount + router amount
-		address to
-	) external pure returns (Action memory);
-	
-	// remove liquidity
-	function getRemoveLiquidityUniV2Action(
-		uint lpAmount,
-		uint amount0Min, 
-		uint amount1Min, 
-		address to
-	) external pure returns (Action memory);
-	
 	// withdraw token (for advanced use cases)
 	function getWithdrawTokenAction(
 		address token, 
@@ -112,6 +80,32 @@ interface IRouter01V3 {
 	
 	// withdraw ETH (expect WETH to be in the contract)
 	function getWithdrawEthAction(
+		address to
+	) external pure returns (Action memory);
+	
+	// add liquidity
+	function getMintUniV2Action(
+		uint lpAmountUser,
+		uint amount0Desired, 	// intended as user amount
+		uint amount1Desired, 	// intended as user amount
+		uint amount0Min, 		// intended as user amount
+		uint amount1Min			// intended as user amount
+	) external pure returns (Action memory);
+	function getBorrowAndMintUniV2Action(
+		uint lpAmountUser,
+		uint amount0User,
+		uint amount1User,
+		uint amount0Desired,	// intended as user amount + router amount
+		uint amount1Desired,	// intended as user amount + router amount
+		uint amount0Min,		// intended as user amount + router amount
+		uint amount1Min		// intended as user amount + router amount
+	) external pure returns (Action memory);
+	
+	// remove liquidity
+	function getRedeemUniV2Action(
+		uint percentage,
+		uint amount0Min, 
+		uint amount1Min, 
 		address to
 	) external pure returns (Action memory);
 	

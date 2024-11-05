@@ -145,7 +145,7 @@ contract('Deleverage01xUniswapV2', function (accounts) {
 		//Leverage
 		//await leverage(router, nftlp, borrower, TOKEN_ID, ETH_LEVERAGE_AMOUNT, UNI_LEVERAGE_AMOUNT, '0', '0', permitBorrowETH, permitBorrowUNI, ETH_IS_A);
 		*/
-		TOKEN_ID = receipt.returnValue;
+		TOKEN_ID = receipt.tokenId;
 		LP_AMOUNT = await nftlp.liquidity(TOKEN_ID);
 		console.log(receipt.receipt.gasUsed);
 	});

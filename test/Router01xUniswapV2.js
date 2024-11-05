@@ -14,8 +14,10 @@ const {
 const {
 	getAmounts,
 	mintCollateral,
+	mintCollateralETH,
 	mintNewCollateral,
 	redeemCollateral,
+	redeemCollateralETH,
 	repay,
 	repayETH,
 	borrow,
@@ -222,11 +224,9 @@ contract('Router01V3', function (accounts) {
 		await expectRevert.unspecified(mintNewCollateral(router, nftlp, borrower, LP_AMOUNT));
 		const permitData = await permitGenerator.permit(uniswapV2Pair, borrower, router.address, LP_AMOUNT, DEADLINE);
 		const receipt =  await mintNewCollateral(router, nftlp, borrower, LP_AMOUNT);
-		TOKEN_ID = receipt.returnValue;
+		TOKEN_ID = receipt.tokenId;
 		expect(await collateral.ownerOf(TOKEN_ID)).to.eq(borrower);
 		expect(await nftlp.liquidity(TOKEN_ID) * 1).to.eq(LP_AMOUNT * 1);
-		
-		// TODO create function to increase liquidity
 	});
 
 	it('redeem', async () => {
@@ -259,22 +259,27 @@ contract('Router01V3', function (accounts) {
 	it('redeem and remint collateral', async () => {
 		// Redeem 20%
 		const redeemAmount = LP_AMOUNT.div(new BN(5));
+		let redeemAmountUNI = UNI_LP_AMOUNT.div(new BN(5));
+		const redeemAmountETH = ETH_LP_AMOUNT.div(new BN(5));
 		const permitDataNft1 = await permitGenerator.nftPermit(collateral, borrower, router.address, TOKEN_ID, DEADLINE);
-		await redeemCollateral(router, nftlp, borrower, TOKEN_ID, bnMantissa(0.2));
-		expect(await uniswapV2Pair.balanceOf(borrower)*1).to.eq(redeemAmount*1);
+		const op = redeemCollateralETH(router, nftlp, borrower, TOKEN_ID, bnMantissa(0.2), ETH_IS_0);
+		await checkETHBalance(op, borrower, redeemAmountETH, false);
+		expect(await UNI.balanceOf(borrower)*1).to.eq(redeemAmountUNI*1);
+		redeemAmountUNI = await UNI.balanceOf(borrower); // adjust for actual amount
 		// Mint new position
-		const permitData1 = await permitGenerator.permit(uniswapV2Pair, borrower, router.address, redeemAmount, DEADLINE);
-		const receipt =  await mintNewCollateral(router, nftlp, borrower, redeemAmount);
-		TOKEN_2 = receipt.returnValue;
+		await UNI.approve(router.address, redeemAmountUNI, {from: borrower});
+		const receipt =  await mintCollateralETH(router, nftlp, borrower, MAX_UINT_256, 0, redeemAmountETH, redeemAmountUNI, 0, 0, ETH_IS_0, ETH_IS_0);
+		TOKEN_2 = receipt.tokenId;
 		expect(await collateral.ownerOf(TOKEN_2)).to.eq(borrower);
 		expect(await nftlp.liquidity(TOKEN_2) * 1).to.eq(redeemAmount * 1);
 		// Redeem 100%
 		const permitDataNft2 = await permitGenerator.nftPermit(collateral, borrower, router.address, TOKEN_2, DEADLINE);
-		await redeemCollateral(router, nftlp, borrower, TOKEN_2, oneMantissa);
-		expect(await uniswapV2Pair.balanceOf(borrower)*1).to.eq(redeemAmount*1);
+		const op2 = redeemCollateralETH(router, nftlp, borrower, TOKEN_2, oneMantissa, ETH_IS_0);
+		await checkETHBalance(op2, borrower, redeemAmountETH, false);
+		expect(await UNI.balanceOf(borrower)*1).to.eq(redeemAmountUNI*1);
 		// Mint to old position
-		const permitData2 = await permitGenerator.permit(uniswapV2Pair, borrower, router.address, redeemAmount, DEADLINE);
-		await mintCollateral(router, nftlp, borrower, TOKEN_ID, redeemAmount);
+		await UNI.approve(router.address, redeemAmountUNI, {from: borrower});
+		await mintCollateralETH(router, nftlp, borrower, TOKEN_ID, 0, redeemAmountETH, redeemAmountUNI, 0, 0, ETH_IS_0, ETH_IS_0);
 		expect(await nftlp.liquidity(TOKEN_ID) * 1).to.eq(LP_AMOUNT * 1);
 	});
 	
