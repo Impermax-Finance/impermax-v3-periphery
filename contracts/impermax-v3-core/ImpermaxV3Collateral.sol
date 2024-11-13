@@ -52,7 +52,7 @@ contract ImpermaxV3Collateral is ICollateral, CSetter {
 			redeemTokenId = tokenId;
 			_burn(tokenId);
 			INFTLP(underlying).safeTransferFrom(address(this), to, redeemTokenId);
-			if (data.length > 0) IImpermaxCallee(to).impermaxRedeem(msg.sender, tokenId, redeemTokenId, data);
+			if (data.length > 0) IImpermaxCallee(to).impermaxV3Redeem(msg.sender, tokenId, redeemTokenId, data);
 			
 			// finally check that the position is not left underwater
 			require(IBorrowable(borrowable0).borrowBalance(tokenId) == 0, "ImpermaxV3Collateral: INSUFFICIENT_LIQUIDITY");
@@ -60,7 +60,7 @@ contract ImpermaxV3Collateral is ICollateral, CSetter {
 		} else {
 			redeemTokenId = INFTLP(underlying).split(tokenId, percentage);
 			INFTLP(underlying).safeTransferFrom(address(this), to, redeemTokenId);
-			if (data.length > 0) IImpermaxCallee(to).impermaxRedeem(msg.sender, tokenId, redeemTokenId, data);
+			if (data.length > 0) IImpermaxCallee(to).impermaxV3Redeem(msg.sender, tokenId, redeemTokenId, data);
 			
 			// finally check that the position is not left underwater
 			require(!isLiquidatable(tokenId), "ImpermaxV3Collateral: INSUFFICIENT_LIQUIDITY");

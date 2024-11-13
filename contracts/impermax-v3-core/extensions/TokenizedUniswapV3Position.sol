@@ -62,7 +62,7 @@ contract TokenizedUniswapV3Position is ITokenizedUniswapV3Position, INFTLP, Impe
 		token1 = _token1;
 	}
 	
-	function _getPool(uint24 fee) internal returns (address pool) {
+	function getPool(uint24 fee) public returns (address pool) {
 		pool = uniswapV3PoolByFee[fee];
 		if (pool == address(0)) {
 			pool = IUniswapV3Factory(uniswapV3Factory).getPool(token0, token1, fee);
@@ -135,7 +135,7 @@ contract TokenizedUniswapV3Position is ITokenizedUniswapV3Position, INFTLP, Impe
 	
 	// this low-level function should be called from another contract
 	function mint(address to, uint24 fee, int24 tickLower, int24 tickUpper) external nonReentrant returns (uint256 newTokenId) {
-		address pool = _getPool(fee);		
+		address pool = getPool(fee);		
 		bytes32 hash = UniswapV3Position.getHash(address(this), tickLower, tickUpper);
 		(uint balance, uint256 fg0, uint256 fg1,,) = IUniswapV3Pool(pool).positions(hash);
 		uint liquidity = balance.sub(totalBalance[fee][tickLower][tickUpper]);
@@ -166,7 +166,7 @@ contract TokenizedUniswapV3Position is ITokenizedUniswapV3Position, INFTLP, Impe
 		delete positions[tokenId];
 		_burn(tokenId);
 		
-		address pool = _getPool(position.fee);		
+		address pool = getPool(position.fee);		
 		(amount0, amount1) = IUniswapV3Pool(pool).burn(position.tickLower, position.tickUpper, position.liquidity);
 		_updateBalance(position.fee, position.tickLower, position.tickUpper);
 		
@@ -206,7 +206,6 @@ contract TokenizedUniswapV3Position is ITokenizedUniswapV3Position, INFTLP, Impe
 		emit UpdatePositionFeeGrowthInside(newTokenId, oldPosition.feeGrowthInside0LastX128, oldPosition.feeGrowthInside1LastX128);
 	}
 	
-	// TODO WTFFFF -> I'm not checking if the positions have the same range?
 	function join(uint256 tokenId, uint256 tokenToJoin) external nonReentrant {
 		_checkAuthorized(ownerOf[tokenToJoin], msg.sender, tokenToJoin);
 		

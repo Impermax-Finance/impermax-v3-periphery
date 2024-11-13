@@ -15,6 +15,7 @@ contract BSetter is PoolToken, BStorage {
 	event NewReserveFactor(uint newReserveFactor);
 	event NewKinkUtilizationRate(uint newKinkUtilizationRate);
 	event NewAdjustSpeed(uint newAdjustSpeed);
+	event NewDebtCeiling(uint newDebtCeiling);
 	event NewBorrowTracker(address newBorrowTracker);
 	
 	// called once by the factory at time of deployment
@@ -31,37 +32,41 @@ contract BSetter is PoolToken, BStorage {
 		exchangeRateLast = initialExchangeRate;
 	}
 	
-	function _setReserveFactor(uint newReserveFactor) external nonReentrant {
+	function _setReserveFactor(uint newReserveFactor) external nonReentrant onlyAdmin {
 		_checkSetting(newReserveFactor, 0, RESERVE_FACTOR_MAX);
 		reserveFactor = newReserveFactor;
 		emit NewReserveFactor(newReserveFactor);
 	}
 
-	function _setKinkUtilizationRate(uint newKinkUtilizationRate) external nonReentrant {
+	function _setKinkUtilizationRate(uint newKinkUtilizationRate) external nonReentrant onlyAdmin {
 		_checkSetting(newKinkUtilizationRate, KINK_UR_MIN, KINK_UR_MAX);
 		kinkUtilizationRate = newKinkUtilizationRate;
 		emit NewKinkUtilizationRate(newKinkUtilizationRate);
 	}
 
-	function _setAdjustSpeed(uint newAdjustSpeed) external nonReentrant {
+	function _setAdjustSpeed(uint newAdjustSpeed) external nonReentrant onlyAdmin {
 		_checkSetting(newAdjustSpeed, ADJUST_SPEED_MIN, ADJUST_SPEED_MAX);
 		adjustSpeed = newAdjustSpeed;
 		emit NewAdjustSpeed(newAdjustSpeed);
 	}
 
-	function _setBorrowTracker(address newBorrowTracker) external nonReentrant {
-		_checkAdmin();
+	function _setDebtCeiling(uint newDebtCeiling) external nonReentrant onlyAdmin {
+		debtCeiling = newDebtCeiling;
+		emit NewDebtCeiling(newDebtCeiling);
+	}
+
+	function _setBorrowTracker(address newBorrowTracker) external nonReentrant onlyAdmin {
 		borrowTracker = newBorrowTracker;
 		emit NewBorrowTracker(newBorrowTracker);
 	}
 	
 	function _checkSetting(uint parameter, uint min, uint max) internal view {
-		_checkAdmin();
 		require(parameter >= min, "ImpermaxV3Borrowable: INVALID_SETTING");
 		require(parameter <= max, "ImpermaxV3Borrowable: INVALID_SETTING");
 	}
-	
-	function _checkAdmin() internal view {
+
+	modifier onlyAdmin() {
 		require(msg.sender == IFactory(factory).admin(), "ImpermaxV3Borrowable: UNAUTHORIZED");
+		_;
 	}
 }

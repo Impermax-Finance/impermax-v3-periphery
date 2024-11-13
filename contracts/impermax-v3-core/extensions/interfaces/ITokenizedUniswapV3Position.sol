@@ -41,7 +41,7 @@ interface ITokenizedUniswapV3Position {
 	);
 	function positionLength() external view returns (uint256);
 	
-	function uniswapV3PoolByFee(uint24 fee) external view returns (address pool);
+	function getPool(uint24 fee) external returns (address pool);
 	function poolsList(uint256 index) external view returns (address);
 	
 	function oraclePriceSqrtX96() external returns (uint256);

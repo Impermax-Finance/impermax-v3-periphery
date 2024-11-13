@@ -88,6 +88,7 @@ interface IBorrowable {
 	event NewReserveFactor(uint newReserveFactor);
 	event NewKinkUtilizationRate(uint newKinkUtilizationRate);
 	event NewAdjustSpeed(uint newAdjustSpeed);
+	event NewDebtCeiling(uint newDebtCeiling);
 	event NewBorrowTracker(address newBorrowTracker);
 
 	function RESERVE_FACTOR_MAX() external pure returns (uint);

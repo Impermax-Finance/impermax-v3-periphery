@@ -76,8 +76,9 @@ contract ImpermaxV3Borrowable is IBorrowable, PoolToken, BStorage, BSetter, BInt
 			accountBorrows = accountBorrowsPrior.add(increaseAmount);
 			borrowSnapshot.principal = safe112(accountBorrows);
 			borrowSnapshot.interestIndex = _borrowIndex;
-			_totalBorrows = uint(totalBorrows).add(increaseAmount);	
+			_totalBorrows = uint(totalBorrows).add(increaseAmount);
 			totalBorrows = safe112(_totalBorrows);
+			require(_totalBorrows <= debtCeiling, "ImpermaxV3Borrowable: TOTAL_BORROWS_ABOVE_DEBT_CEILING");
 		}
 		else {
 			BorrowSnapshot storage borrowSnapshot = borrowBalances[tokenId];
@@ -107,7 +108,7 @@ contract ImpermaxV3Borrowable is IBorrowable, PoolToken, BStorage, BSetter, BInt
 		
 		// optimistically transfer funds
 		if (borrowAmount > 0) _safeTransfer(receiver, borrowAmount);
-		if (data.length > 0) IImpermaxCallee(receiver).impermaxBorrow(msg.sender, tokenId, borrowAmount, data);
+		if (data.length > 0) IImpermaxCallee(receiver).impermaxV3Borrow(msg.sender, tokenId, borrowAmount, data);
 		uint balance = IERC20(underlying).balanceOf(address(this));
 		
 		uint repayAmount = balance.add(borrowAmount).sub(_totalBalance);
