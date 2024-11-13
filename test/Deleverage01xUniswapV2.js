@@ -33,8 +33,8 @@ const BDeployer = artifacts.require('BDeployer');
 const CDeployer = artifacts.require('CDeployer');
 const Collateral = artifacts.require('ImpermaxV3Collateral');
 const Borrowable = artifacts.require('ImpermaxV3Borrowable');
-const Router01V3 = artifacts.require('Router01V3');
-const Router01V3_0 = artifacts.require('Router01V3_0');
+const ImpermaxV3UniV2Router01 = artifacts.require('ImpermaxV3UniV2Router01');
+const ImpermaxV3LendRouter01 = artifacts.require('ImpermaxV3LendRouter01');
 const TokenizedUniswapV2Factory = artifacts.require('TokenizedUniswapV2Factory');
 const TokenizedUniswapV2Position = artifacts.require('TokenizedUniswapV2Position');
 const WETH9 = artifacts.require('WETH9');
@@ -117,8 +117,8 @@ contract('Deleverage01xUniswapV2', function (accounts) {
 		ETH_IS_A = await borrowable0.underlying() == WETH.address;
 		if (ETH_IS_A) [borrowableWETH, borrowableUNI] = [borrowable0, borrowable1];
 		else [borrowableWETH, borrowableUNI] = [borrowable1, borrowable0]
-		router = await Router01V3.new(impermaxFactory.address, WETH.address);
-		routerLend = await Router01V3_0.new(impermaxFactory.address, WETH.address);
+		router = await ImpermaxV3UniV2Router01.new(impermaxFactory.address, WETH.address);
+		routerLend = await ImpermaxV3LendRouter01.new(impermaxFactory.address, WETH.address);
 		await increaseTime(3700); // wait for oracle to be ready
 		await permitGenerator.initialize();
 		

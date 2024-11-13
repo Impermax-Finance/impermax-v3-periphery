@@ -40,8 +40,8 @@ const BDeployer = artifacts.require('BDeployer');
 const CDeployer = artifacts.require('CDeployer');
 const Collateral = artifacts.require('ImpermaxV3Collateral');
 const Borrowable = artifacts.require('ImpermaxV3Borrowable');
-const Router01V3 = artifacts.require('Router01V3');
-const Router01V3_0 = artifacts.require('Router01V3_0');
+const ImpermaxV3UniV2Router01 = artifacts.require('ImpermaxV3UniV2Router01');
+const ImpermaxV3LendRouter01 = artifacts.require('ImpermaxV3LendRouter01');
 const TokenizedUniswapV2Factory = artifacts.require('TokenizedUniswapV2Factory');
 const TokenizedUniswapV2Position = artifacts.require('TokenizedUniswapV2Position');
 const WETH9 = artifacts.require('WETH9');
@@ -98,7 +98,7 @@ async function checkETHBalance(operation, user, expectedChange, negative = false
 	}
 }
 
-contract('Router01V3', function (accounts) {
+contract('ImpermaxV3UniV2Router01', function (accounts) {
 	let root = accounts[0];
 	let borrower = accounts[1];
 	let lender = accounts[2];
@@ -154,9 +154,8 @@ contract('Router01V3', function (accounts) {
 		ETH_IS_0 = await borrowable0.underlying() == WETH.address;
 		if (ETH_IS_0) [borrowableWETH, borrowableUNI] = [borrowable0, borrowable1];
 		else [borrowableWETH, borrowableUNI] = [borrowable1, borrowable0]
-		router = await Router01V3.new(impermaxFactory.address, WETH.address);
-		//routerLend = await Router01V3.new(impermaxFactory.address, WETH.address);
-		routerLend = await Router01V3_0.new(impermaxFactory.address, WETH.address);
+		router = await ImpermaxV3UniV2Router01.new(impermaxFactory.address, WETH.address);
+		routerLend = await ImpermaxV3LendRouter01.new(impermaxFactory.address, WETH.address);
 		await increaseTime(3700); // wait for oracle to be ready
 		await permitGenerator.initialize();
 	});
@@ -170,7 +169,7 @@ contract('Router01V3', function (accounts) {
 			amountAMin: '0', 
 			amountBMin: '600'
 		}, ETH_IS_0);
-		const r1 = await router._optimalLiquidity(uniswapV2Pair.address, t1.amount0Desired, t1.amount1Desired, t1.amount0Min, t1.amount1Min);
+		const r1 = await router._optimalLiquidityUniV2(uniswapV2Pair.address, t1.amount0Desired, t1.amount1Desired, t1.amount0Min, t1.amount1Min);
 		expect(r1.amount0 * 1).to.eq(ETH_IS_0 ? 8 : 800);
 		expect(r1.amount1 * 1).to.eq(ETH_IS_0 ? 800 : 8);
 		const t2 = getAmounts({
@@ -179,7 +178,7 @@ contract('Router01V3', function (accounts) {
 			amountAMin: '6', 
 			amountBMin: '0'
 		}, ETH_IS_0);
-		const r2 = await router._optimalLiquidity(uniswapV2Pair.address, t2.amount0Desired, t2.amount1Desired, t2.amount0Min, t2.amount1Min);
+		const r2 = await router._optimalLiquidityUniV2(uniswapV2Pair.address, t2.amount0Desired, t2.amount1Desired, t2.amount0Min, t2.amount1Min);
 		expect(r2.amount0 * 1).to.eq(ETH_IS_0 ? 7 : 700);
 		expect(r2.amount1 * 1).to.eq(ETH_IS_0 ? 700 : 7);
 		const t3 = getAmounts({
@@ -189,7 +188,7 @@ contract('Router01V3', function (accounts) {
 			amountBMin: '600'
 		}, ETH_IS_0);
 		await expectRevert(
-			router._optimalLiquidity(uniswapV2Pair.address, t3.amount0Desired, t3.amount1Desired, t3.amount0Min, t3.amount1Min),
+			router._optimalLiquidityUniV2(uniswapV2Pair.address, t3.amount0Desired, t3.amount1Desired, t3.amount0Min, t3.amount1Min),
 			ETH_IS_0 ? "ImpermaxRouter: INSUFFICIENT_1_AMOUNT" : "ImpermaxRouter: INSUFFICIENT_0_AMOUNT"
 		);
 		const t4 = getAmounts({
@@ -199,7 +198,7 @@ contract('Router01V3', function (accounts) {
 			amountBMin: '0'
 		}, ETH_IS_0);
 		await expectRevert(
-			router._optimalLiquidity(uniswapV2Pair.address, t4.amount0Desired, t4.amount1Desired, t4.amount0Min, t4.amount1Min),
+			router._optimalLiquidityUniV2(uniswapV2Pair.address, t4.amount0Desired, t4.amount1Desired, t4.amount0Min, t4.amount1Min),
 			ETH_IS_0 ? "ImpermaxRouter: INSUFFICIENT_0_AMOUNT" : "ImpermaxRouter: INSUFFICIENT_1_AMOUNT"
 		);
 	});
