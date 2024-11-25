@@ -18,11 +18,11 @@ contract BAllowance is PoolToken, BStorage {
 	}
 	
 	function _checkBorrowAllowance(address owner, address spender, uint256 value) internal {
+		if (spender == owner) return;
 		uint _borrowAllowance = borrowAllowance[owner][spender];
-		if (spender != owner && _borrowAllowance != uint256(-1)) {
-			require(_borrowAllowance >= value, "ImpermaxV3Borrowable: BORROW_NOT_ALLOWED");
-			borrowAllowance[owner][spender] = _borrowAllowance - value;
-		}	
+		if (_borrowAllowance == uint256(-1)) return;
+		require(_borrowAllowance >= value, "ImpermaxV3Borrowable: BORROW_NOT_ALLOWED");
+		borrowAllowance[owner][spender] = _borrowAllowance - value;
 	}
 
 	// keccak256("BorrowPermit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)");

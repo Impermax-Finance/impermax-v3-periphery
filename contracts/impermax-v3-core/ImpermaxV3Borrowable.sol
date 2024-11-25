@@ -59,6 +59,9 @@ contract ImpermaxV3Borrowable is IBorrowable, PoolToken, BStorage, BSetter, BInt
 		if (borrowSnapshot.interestIndex == 0) return 0; // not initialized
 		return uint(borrowSnapshot.principal).mul(borrowIndex).div(borrowSnapshot.interestIndex);
 	}
+	function currentBorrowBalance(uint256 tokenId) external accrue returns (uint) {
+		return borrowBalance(tokenId);
+	}
 	
 	function _trackBorrow(uint256 tokenId, uint accountBorrows, uint _borrowIndex) internal {
 		address _borrowTracker = borrowTracker;
@@ -124,7 +127,7 @@ contract ImpermaxV3Borrowable is IBorrowable, PoolToken, BStorage, BSetter, BInt
 
 	// this low-level function should be called from another contract
 	function liquidate(uint256 tokenId, uint repayAmount, address liquidator, bytes calldata data) external nonReentrant update accrue returns (uint seizeTokenId) {
-		repayAmount = repayAmount < borrowBalance(tokenId) ? repayAmount : borrowBalance(tokenId);
+		repayAmount = Math.min(repayAmount, borrowBalance(tokenId));
 		seizeTokenId = ICollateral(collateral).seize(tokenId, repayAmount, liquidator, data);
 		
 		uint balance = IERC20(underlying).balanceOf(address(this));
@@ -141,13 +144,14 @@ contract ImpermaxV3Borrowable is IBorrowable, PoolToken, BStorage, BSetter, BInt
 		require(reduceToRatio < 1e18, "ImpermaxV3Borrowable: NOT_UNDERWATER");
 	
 		uint currentBorrowBalance = borrowBalance(tokenId);
+		if (currentBorrowBalance == 0) return;
 		uint repayAmount = currentBorrowBalance.sub(currentBorrowBalance.mul(reduceToRatio).div(1e18));
 		(uint accountBorrowsPrior, uint accountBorrows, uint _totalBorrows) = _updateBorrow(tokenId, 0, repayAmount);
 		
 		emit RestructureDebt(tokenId, reduceToRatio, repayAmount, accountBorrowsPrior, accountBorrows, _totalBorrows);
 	}
 		
-	function trackBorrow(uint256 tokenId) external {
+	function trackBorrow(uint256 tokenId) external accrue {
 		_trackBorrow(tokenId, borrowBalance(tokenId), borrowIndex);
 	}
 	

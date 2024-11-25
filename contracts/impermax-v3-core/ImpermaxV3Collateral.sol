@@ -19,8 +19,8 @@ contract ImpermaxV3Collateral is ICollateral, CSetter {
 	/*** Collateralization Model ***/
 	
 	function _getPositionObjectAmounts(uint tokenId, uint debtX, uint debtY) internal returns (CollateralMath.PositionObject memory positionObject) {
-		if (debtX == uint(-1)) debtX = IBorrowable(borrowable0).borrowBalance(tokenId);
-		if (debtY == uint(-1)) debtY = IBorrowable(borrowable1).borrowBalance(tokenId);
+		if (debtX == uint(-1)) debtX = IBorrowable(borrowable0).currentBorrowBalance(tokenId);
+		if (debtY == uint(-1)) debtY = IBorrowable(borrowable1).currentBorrowBalance(tokenId);
 		
 		(uint priceSqrtX96, INFTLP.RealXYs memory realXYs) = 
 			INFTLP(underlying).getPositionData(tokenId, safetyMarginSqrt);
@@ -129,12 +129,11 @@ contract ImpermaxV3Collateral is ICollateral, CSetter {
 		}
 		
 		uint seizePercentage = repayToCollateralRatio.mul(liquidationIncentive).div(1e18);
-		uint feePercentage = repayToCollateralRatio.mul(liquidationFee).div(uint(1e18).sub(seizePercentage));	
-		
 		seizeTokenId = INFTLP(underlying).split(tokenId, seizePercentage);
 
 		address reservesManager = IFactory(factory).reservesManager();		
-		if (feePercentage > 0 && reservesManager != address(0)) {
+		if (liquidationFee > 0 && reservesManager != address(0)) {
+			uint feePercentage = repayToCollateralRatio.mul(liquidationFee).div(uint(1e18).sub(seizePercentage));	
 			uint feeTokenId = INFTLP(underlying).split(tokenId, feePercentage);		
 			_mint(reservesManager, feeTokenId);
 			emit Seize(reservesManager, tokenId, feePercentage, feeTokenId);

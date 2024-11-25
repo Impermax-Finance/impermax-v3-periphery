@@ -55,6 +55,7 @@ interface IBorrowable {
 	function totalBorrows() external view returns (uint);
 	function borrowAllowance(address owner, address spender) external view returns (uint);
 	function borrowBalance(uint tokenId) external view returns (uint);	
+	function currentBorrowBalance(uint tokenId) external returns (uint);	
 	function borrowTracker() external view returns (address);
 	
 	function BORROW_PERMIT_TYPEHASH() external pure returns (bytes32);

@@ -89,7 +89,7 @@ library CollateralMath {
 	function getPostLiquidationCollateralRatio(PositionObject memory positionObject) internal pure returns (uint) {
 		uint collateralNeeded = getDebtValue(positionObject, Price.CURRENT).mul(positionObject.liquidationPenalty).div(1e18);
 		uint collateralValue = getCollateralValue(positionObject, Price.CURRENT);
-		return collateralValue.mul(1e18).div(collateralNeeded);
+		return collateralValue.mul(1e18).div(collateralNeeded, "ImpermaxV3Collateral: NO_DEBT");
 	}
 	
 	function isLiquidatable(PositionObject memory positionObject) internal pure returns (bool) {

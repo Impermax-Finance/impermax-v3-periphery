@@ -18,7 +18,10 @@ contract TokenizedUniswapV3Factory {
 		return allNFTLP.length;
 	}
 
-	function createNFTLP(address token0, address token1) external returns (address NFTLP) {
+	function createNFTLP(address tokenA, address tokenB) external returns (address NFTLP) {
+		require(tokenA != tokenB);
+		(address token0, address token1) = tokenA < tokenB ? (tokenA, tokenB) : (tokenB, tokenA);
+		require(token0 != address(0));
 		require(getNFTLP[token0][token1] == address(0), "TokenizedUniswapV3Factory: PAIR_EXISTS");
 		bytes memory bytecode = type(TokenizedUniswapV3Position).creationCode;
 		bytes32 salt = keccak256(abi.encodePacked(token0, token1));
