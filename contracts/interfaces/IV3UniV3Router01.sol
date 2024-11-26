@@ -11,7 +11,8 @@ interface IV3UniV3Router01 {
 		uint _tokenId,
 		uint deadline,
 		bytes calldata actionsData,
-		bytes calldata permitsData
+		bytes calldata permitsData,
+		bool withCollateralTransfer
 	) external payable;
 	
 	/*** Available actions ***/
