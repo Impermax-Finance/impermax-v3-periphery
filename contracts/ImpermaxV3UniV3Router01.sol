@@ -381,12 +381,16 @@ contract ImpermaxV3UniV3Router01 is IV3UniV3Router01, ImpermaxV3BaseRouter01 {
 			amount0Desired,
 			amount1Desired
 		);
+		// get amountsOut
 		(amount0, amount1) = LiquidityAmounts.getAmountsForLiquidity(
 			sqrtPriceX96,
 			sqrtRatioAX96,
 			sqrtRatioBX96,
 			liquidity
 		);
+		// round up to get amountsIn
+		if (amount0 < amount0Desired) amount0++; 
+		if (amount1 < amount1Desired) amount1++; 
 		
 		require(amount0 >= amount0Min, "ImpermaxRouter: INSUFFICIENT_0_AMOUNT");
 		require(amount1 >= amount1Min, "ImpermaxRouter: INSUFFICIENT_1_AMOUNT");
