@@ -23,11 +23,6 @@ contract ImpermaxV3BaseRouter01 is IV3BaseRouter01, IImpermaxCallee {
 		require(deadline >= block.timestamp, "ImpermaxRouter: EXPIRED");
 		_;
 	}
-	
-	function _checkOwnerNftlp(address nftlp, uint256 tokenId) internal view {
-		address collateral = getCollateral(nftlp);
-		require(IERC721(collateral).ownerOf(tokenId) == msg.sender, "ImpermaxRouter: UNAUTHORIZED");
-	}
 
 	constructor(address _factory, address _WETH) public {
 		factory = _factory;
@@ -77,7 +72,6 @@ contract ImpermaxV3BaseRouter01 is IV3BaseRouter01, IImpermaxCallee {
 		address redeemTo;
 		uint amount0Min;
 		uint amount1Min;
-		ActionType currentAction;
 		Action nextAction;
 	}
 	
@@ -108,8 +102,7 @@ contract ImpermaxV3BaseRouter01 is IV3BaseRouter01, IImpermaxCallee {
 		uint tokenId, 
 		uint amountMax
 	) internal returns (uint amount) { 
-		IBorrowable(borrowable).accrueInterest();
-		uint borrowedAmount = IBorrowable(borrowable).borrowBalance(tokenId);
+		uint borrowedAmount = IBorrowable(borrowable).currentBorrowBalance(tokenId);
 		amount = Math.min(amountMax, borrowedAmount);
 	}
 	function _repayUser(
@@ -230,8 +223,8 @@ contract ImpermaxV3BaseRouter01 is IV3BaseRouter01, IImpermaxCallee {
 		uint tokenId,
 		address msgSender,
 		Action memory action
-	) internal {
-		if (action.actionType == ActionType.NO_ACTION) return;
+	) internal returns (uint) {
+		if (action.actionType == ActionType.NO_ACTION) return tokenId;
 		Action memory nextAction = abi.decode(action.nextAction, (Action));
 		if (action.actionType == ActionType.BORROW) {
 			BorrowData memory decoded = abi.decode(action.actionData, (BorrowData));
@@ -244,7 +237,7 @@ contract ImpermaxV3BaseRouter01 is IV3BaseRouter01, IImpermaxCallee {
 				decoded.to,
 				nextAction
 			);
-			return;
+			return tokenId;
 		}
 		else if (action.actionType == ActionType.REPAY_USER) {
 			RepayUserData memory decoded = abi.decode(action.actionData, (RepayUserData));
@@ -281,7 +274,7 @@ contract ImpermaxV3BaseRouter01 is IV3BaseRouter01, IImpermaxCallee {
 		}
 		else revert("ImpermaxRouter: INVALID_ACTION");
 		
-		_execute(
+		return _execute(
 			pool,
 			tokenId,
 			msgSender,
@@ -298,29 +291,40 @@ contract ImpermaxV3BaseRouter01 is IV3BaseRouter01, IImpermaxCallee {
 		uint tokenId,
 		uint deadline,
 		bytes calldata actionsData,
-		bytes calldata permitsData
+		bytes calldata permitsData,
+		bool withCollateralTransfer
 	) external payable ensure(deadline) {
 		if (msg.value > 0) {
 			IWETH(WETH).deposit.value(msg.value)();
 		}
-		// TODO execute all permits HERE
+		// TODO execute all permits -> ORA FACCIO QUESTO 
+		// parto da permit data object che supporta
+		// nft, permit1, permit2
 			
 		Action[] memory actions = abi.decode(actionsData, (Action[]));
 		
 		LendingPool memory pool = getLendingPool(nftlp);
 		if (tokenId != uint(-1)) {
-			_checkOwnerNftlp(nftlp, tokenId);
-			// TODO: HERE faccio transferfrom nft da msg.sender a router per togliere bisogno di borrowPermit
+			if (withCollateralTransfer) {
+				IERC721(pool.collateral).transferFrom(msg.sender, address(this), tokenId);
+			} else {
+				require(IERC721(pool.collateral).ownerOf(tokenId) == msg.sender, "ImpermaxRouter: UNAUTHORIZED");
+			}
 		} else {
 			_checkFirstAction(actions[0].actionType);
+			withCollateralTransfer = true;
 		}
 			
-		_execute(
+		tokenId = _execute(
 			pool,
 			tokenId,
 			msg.sender,
 			_actionsSorter(actions)
 		);
+		
+		if (withCollateralTransfer) {
+			IERC721(pool.collateral).transferFrom(address(this), msg.sender, tokenId);
+		}
 	}
 	
 	/*** Callbacks ***/
@@ -387,17 +391,6 @@ contract ImpermaxV3BaseRouter01 is IV3BaseRouter01, IImpermaxCallee {
 		(bool approveMax, uint8 v, bytes32 r, bytes32 s) = abi.decode(permitData, (bool, uint8, bytes32, bytes32));
 		uint value = approveMax ? uint(-1) : amount;
 		IPoolToken(poolToken).permit(msg.sender, address(this), value, deadline, v, r, s);
-	}
-	function _borrowPermit(
-		address borrowable, 
-		uint amount, 
-		uint deadline,
-		bytes memory permitData
-	) internal {
-		if (permitData.length == 0) return;
-		(bool approveMax, uint8 v, bytes32 r, bytes32 s) = abi.decode(permitData, (bool, uint8, bytes32, bytes32));
-		uint value = approveMax ? uint(-1) : amount;
-		IBorrowable(borrowable).borrowPermit(msg.sender, address(this), value, deadline, v, r, s);
 	}
 	function _nftPermit(
 		address erc721, 

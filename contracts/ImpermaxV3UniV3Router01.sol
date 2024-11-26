@@ -74,11 +74,10 @@ contract ImpermaxV3UniV3Router01 is IV3UniV3Router01, ImpermaxV3BaseRouter01 {
 		LendingPool memory pool,
 		uint24 fee,
 		int24 tickLower,
-		int24 tickUpper,
-		address to
+		int24 tickUpper
 	) internal returns (uint tokenId) {
 		tokenId = ITokenizedUniswapV3Position(pool.nftlp).mint(pool.collateral, fee, tickLower, tickUpper);
-		ICollateral(pool.collateral).mint(to, tokenId);
+		ICollateral(pool.collateral).mint(address(this), tokenId);
 	}
 	function _mintUniV3Internal(
 		LendingPool memory pool,
@@ -156,7 +155,6 @@ contract ImpermaxV3UniV3Router01 is IV3UniV3Router01, ImpermaxV3BaseRouter01 {
 			redeemTo: to,
 			amount0Min: amount0Min,
 			amount1Min: amount1Min,
-			currentAction: ActionType.REDEEM_UNIV3,
 			nextAction: nextAction
 		}));
 		ICollateral(pool.collateral).redeem(address(this), tokenId, percentage, decoded);
@@ -259,8 +257,8 @@ contract ImpermaxV3UniV3Router01 is IV3UniV3Router01, ImpermaxV3BaseRouter01 {
 		uint tokenId,
 		address msgSender,
 		Action memory action
-	) internal {
-		if (action.actionType == ActionType.NO_ACTION) return;
+	) internal returns (uint) {
+		if (action.actionType == ActionType.NO_ACTION) return tokenId;
 		Action memory nextAction = abi.decode(action.nextAction, (Action));
 		if (action.actionType == ActionType.MINT_UNIV3_EMPTY) {
 			MintUniV3EmptyData memory decoded = abi.decode(action.actionData, (MintUniV3EmptyData));
@@ -268,8 +266,7 @@ contract ImpermaxV3UniV3Router01 is IV3UniV3Router01, ImpermaxV3BaseRouter01 {
 				pool,
 				decoded.fee,
 				decoded.tickLower,
-				decoded.tickUpper,
-				msgSender
+				decoded.tickUpper
 			);
 		}
 		else if (action.actionType == ActionType.MINT_UNIV3_INTERNAL) {
@@ -309,7 +306,7 @@ contract ImpermaxV3UniV3Router01 is IV3UniV3Router01, ImpermaxV3BaseRouter01 {
 				decoded.to,
 				nextAction
 			);
-			return;
+			return tokenId;
 		}
 		else if (action.actionType == ActionType.BORROW_AND_MINT_UNIV3) {
 			BorrowAndMintUniV3Data memory decoded = abi.decode(action.actionData, (BorrowAndMintUniV3Data));
@@ -327,7 +324,7 @@ contract ImpermaxV3UniV3Router01 is IV3UniV3Router01, ImpermaxV3BaseRouter01 {
 		}
 		else return super._execute(pool, tokenId, msgSender, action);
 		
-		_execute(
+		return _execute(
 			pool,
 			tokenId,
 			msgSender,
@@ -348,8 +345,8 @@ contract ImpermaxV3UniV3Router01 is IV3UniV3Router01, ImpermaxV3BaseRouter01 {
 		address uniswapV3Pool = IUniswapV3Factory(uniswapV3Factory).getPool(decoded.token0, decoded.token1, decoded.fee);
 		require(msg.sender == uniswapV3Pool);
 		
-		uint amount0Router = decoded.amount0Router;
-		uint amount1Router = decoded.amount1Router;
+		uint amount0Router = Math.min(amount0Owed, decoded.amount0Router);
+		uint amount1Router = Math.min(amount0Owed, decoded.amount1Router);
 		uint amount0User = amount0Router < amount0Owed ? amount0Owed - amount0Router : 0;
 		uint amount1User = amount1Router < amount1Owed ? amount1Owed - amount1Router : 0;
 		

@@ -52,11 +52,10 @@ contract ImpermaxV3UniV2Router01 is IV3UniV2Router01, ImpermaxV3BaseRouter01 {
 	/*** Primitive Actions ***/
 	
 	function _mintUniV2Empty(
-		LendingPool memory pool,
-		address to
+		LendingPool memory pool
 	) internal returns (uint tokenId) {
 		tokenId = ITokenizedUniswapV2Position(pool.nftlp).mint(pool.collateral);
-		ICollateral(pool.collateral).mint(to, tokenId);
+		ICollateral(pool.collateral).mint(address(this), tokenId);
 	}
 	function _mintUniV2Internal(
 		LendingPool memory pool,
@@ -130,7 +129,6 @@ contract ImpermaxV3UniV2Router01 is IV3UniV2Router01, ImpermaxV3BaseRouter01 {
 			redeemTo: to,
 			amount0Min: amount0Min,
 			amount1Min: amount1Min,
-			currentAction: ActionType.REDEEM_UNIV2,
 			nextAction: nextAction
 		}));
 		ICollateral(pool.collateral).redeem(address(this), tokenId, percentage, encoded);
@@ -233,11 +231,11 @@ contract ImpermaxV3UniV2Router01 is IV3UniV2Router01, ImpermaxV3BaseRouter01 {
 		uint tokenId,
 		address msgSender,
 		Action memory action
-	) internal {
-		if (action.actionType == ActionType.NO_ACTION) return;
+	) internal returns (uint) {
+		if (action.actionType == ActionType.NO_ACTION) return tokenId;
 		Action memory nextAction = abi.decode(action.nextAction, (Action));
 		if (action.actionType == ActionType.MINT_UNIV2_EMPTY) {
-			tokenId = _mintUniV2Empty(pool, msgSender);
+			tokenId = _mintUniV2Empty(pool);
 		}
 		else if (action.actionType == ActionType.MINT_UNIV2_INTERNAL) {
 			MintUniV2InternalData memory decoded = abi.decode(action.actionData, (MintUniV2InternalData));
@@ -277,7 +275,7 @@ contract ImpermaxV3UniV2Router01 is IV3UniV2Router01, ImpermaxV3BaseRouter01 {
 				decoded.to,
 				nextAction
 			);
-			return;
+			return tokenId;
 		}
 		else if (action.actionType == ActionType.BORROW_AND_MINT_UNIV2) {
 			BorrowAndMintUniV2Data memory decoded = abi.decode(action.actionData, (BorrowAndMintUniV2Data));
@@ -295,7 +293,7 @@ contract ImpermaxV3UniV2Router01 is IV3UniV2Router01, ImpermaxV3BaseRouter01 {
 		}
 		else return super._execute(pool, tokenId, msgSender, action);
 		
-		_execute(
+		return _execute(
 			pool,
 			tokenId,
 			msgSender,
