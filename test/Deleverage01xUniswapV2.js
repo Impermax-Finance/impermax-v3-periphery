@@ -129,10 +129,8 @@ contract('Deleverage01xUniswapV2', function (accounts) {
 		await routerLend.mintETH(borrowableWETH.address, lender, DEADLINE, {value: ETH_LEND_AMOUNT, from: lender});
 		//Mint LP mintAndLeverage
 		await UNI.approve(router.address, UNI_LP_AMOUNT, {from: borrower});
-		const permitBorrowUNI = await permitGenerator.borrowPermit(borrowableUNI, borrower, router.address, UNI_LEVERAGE_AMOUNT, DEADLINE);
-		const permitBorrowETH = await permitGenerator.borrowPermit(borrowableWETH, borrower, router.address, ETH_LEVERAGE_AMOUNT, DEADLINE);
 		/* mintAndLeverageETH */
-		const receipt = await mintAndLeverageETH(router, nftlp, borrower, ETH_LP_AMOUNT, UNI_LP_AMOUNT, ETH_LEVERAGE_AMOUNT.add(ETH_LP_AMOUNT), UNI_LEVERAGE_AMOUNT.add(UNI_LP_AMOUNT), '0', '0', permitBorrowETH, permitBorrowUNI, ETH_IS_A, ETH_IS_A);
+		const receipt = await mintAndLeverageETH(router, nftlp, borrower, ETH_LP_AMOUNT, UNI_LP_AMOUNT, ETH_LEVERAGE_AMOUNT.add(ETH_LP_AMOUNT), UNI_LEVERAGE_AMOUNT.add(UNI_LP_AMOUNT), '0', '0', ETH_IS_A, ETH_IS_A);
 		/* mintAndLeverage
 		await WETH.deposit({value: ETH_LP_AMOUNT, from: borrower});
 		await WETH.approve(router.address, ETH_LP_AMOUNT, {from: borrower});

@@ -39,13 +39,14 @@ function encodeActions(actions = []) {
 	return encode(['tuple(uint256 actionType, bytes actionData, bytes nextAction)[]'], [actions]);
 }
 
-async function execute(router, nftlp, from, tokenId, actions, value = 0) {
+async function execute(router, nftlp, from, tokenId, actions, withCollateralTransfer, value = 0) {
 	const receipt = await router.execute(
 		nftlp.address, 
 		tokenId,
 		DEADLINE,
 		encodeActions(actions),
 		"0x",
+		withCollateralTransfer,
 		{from, value}
 	);
 	receipt.tokenId = tokenId;
@@ -55,7 +56,7 @@ async function execute(router, nftlp, from, tokenId, actions, value = 0) {
 		if (rawLog.topics[0] != eventSignature) continue;
 		if (rawLog.address.toLowerCase() != lendingPool.collateral.toLowerCase()) continue;
 		if (rawLog.topics[1] != '0x0000000000000000000000000000000000000000000000000000000000000000') continue;
-		if (rawLog.topics[2].slice(26) != from.slice(2).toLowerCase()) continue;
+		if (rawLog.topics[2].slice(26) != router.address.slice(2).toLowerCase()) continue;
 		receipt.tokenId = new BN(Number(rawLog.topics[3].toString()));
 	}
 	return receipt;
@@ -68,7 +69,7 @@ async function mintCollateral(router, nftlp, borrower, tokenId, lpAmount, amount
 	];
 	if (tokenId*1==MAX_UINT_256*1) actions.unshift(await router.getMintUniV2EmptyAction());
 	
-	return execute(router, nftlp, borrower, tokenId, actions);
+	return execute(router, nftlp, borrower, tokenId, actions, false);
 }
 
 async function mintCollateralETH(router, nftlp, borrower, tokenId, lpAmount, amountADesired, amountBDesired, amountAMin, amountBMin, A_IS_0, ETH_IS_0) {
@@ -80,7 +81,7 @@ async function mintCollateralETH(router, nftlp, borrower, tokenId, lpAmount, amo
 	];
 	if (tokenId*1==MAX_UINT_256*1) actions.unshift(await router.getMintUniV2EmptyAction());
 	
-	return execute(router, nftlp, borrower, tokenId, actions, amountETH);
+	return execute(router, nftlp, borrower, tokenId, actions, false, amountETH);
 }
 
 async function mintNewCollateral(router, nftlp, borrower, lpAmount) {
@@ -92,7 +93,7 @@ async function redeemCollateral(router, nftlp, borrower, tokenId, percentage) {
 		await router.getRedeemUniV2Action(percentage, 0, 0, borrower)
 	];
 	
-	return execute(router, nftlp, borrower, tokenId, actions);
+	return execute(router, nftlp, borrower, tokenId, actions, false);
 }
 
 async function redeemCollateralETH(router, nftlp, borrower, tokenId, percentage, ETH_IS_0) {
@@ -104,7 +105,7 @@ async function redeemCollateralETH(router, nftlp, borrower, tokenId, percentage,
 		await router.getWithdrawTokenAction(tokenToWithdraw, borrower)
 	];
 	
-	return execute(router, nftlp, borrower, tokenId, actions);
+	return execute(router, nftlp, borrower, tokenId, actions, false);
 }
 
 async function borrowETH(router, nftlp, borrower, tokenId, index, amount) {
@@ -113,7 +114,7 @@ async function borrowETH(router, nftlp, borrower, tokenId, index, amount) {
 		await router.getWithdrawEthAction(borrower)
 	];
 	
-	return execute(router, nftlp, borrower, tokenId, actions);
+	return execute(router, nftlp, borrower, tokenId, actions, true);
 }
 
 async function borrow(router, nftlp, borrower, tokenId, index, amount) {
@@ -121,7 +122,7 @@ async function borrow(router, nftlp, borrower, tokenId, index, amount) {
 		await router.getBorrowAction(index, amount, borrower)
 	];
 	
-	return execute(router, nftlp, borrower, tokenId, actions);
+	return execute(router, nftlp, borrower, tokenId, actions, true);
 }
 
 async function repay(router, nftlp, borrower, tokenId, index, amountMax) {
@@ -129,7 +130,7 @@ async function repay(router, nftlp, borrower, tokenId, index, amountMax) {
 		await router.getRepayUserAction(index, amountMax)
 	];
 	
-	return execute(router, nftlp, borrower, tokenId, actions);
+	return execute(router, nftlp, borrower, tokenId, actions, false);
 }
 
 async function repayETH(router, nftlp, borrower, tokenId, index, amountMax) {
@@ -138,14 +139,12 @@ async function repayETH(router, nftlp, borrower, tokenId, index, amountMax) {
 		await router.getWithdrawEthAction(borrower)	
 	];
 	
-	return execute(router, nftlp, borrower, tokenId, actions, amountMax);
+	return execute(router, nftlp, borrower, tokenId, actions, false, amountMax);
 }
 
 
-async function leverage(router, nftlp, borrower, tokenId, amountADesired, amountBDesired, amountAMin, amountBMin, permitData0, permitData1, A_IS_0) {
+async function leverage(router, nftlp, borrower, tokenId, amountADesired, amountBDesired, amountAMin, amountBMin, permitData, A_IS_0) {
 	const t = getAmounts({amountADesired, amountBDesired, amountAMin, amountBMin}, A_IS_0);
-	const permitDataA = A_IS_0 ? permitData0 : permitData1;
-	const permitDataB = A_IS_0 ? permitData1 : permitData0;
 	
 	const actions = [
 		/*await router.getBorrowAction(0, t.amount0Desired.sub(t.amount0User), router.address),
@@ -158,13 +157,11 @@ async function leverage(router, nftlp, borrower, tokenId, amountADesired, amount
 	];
 	if (tokenId*1==MAX_UINT_256*1) actions.unshift(await router.getMintUniV2EmptyAction());
 	
-	return execute(router, nftlp, borrower, tokenId, actions);
+	return execute(router, nftlp, borrower, tokenId, actions, true);
 }
 
-async function mintAndLeverage(router, nftlp, borrower, amountAUser, amountBUser, amountADesired, amountBDesired, amountAMin, amountBMin, permitData0, permitData1, A_IS_0) {
+async function mintAndLeverage(router, nftlp, borrower, amountAUser, amountBUser, amountADesired, amountBDesired, amountAMin, amountBMin, permitData, A_IS_0) {
 	const t = getAmounts({amountAUser, amountBUser, amountADesired, amountBDesired, amountAMin, amountBMin}, A_IS_0);
-	const permitDataA = A_IS_0 ? permitData0 : permitData1;
-	const permitDataB = A_IS_0 ? permitData1 : permitData0;
 		
 	const actions = [
 		/*await router.getBorrowAction(0, t.amount0Desired.sub(t.amount0User), router.address),
@@ -177,13 +174,11 @@ async function mintAndLeverage(router, nftlp, borrower, amountAUser, amountBUser
 		await router.getBorrowAndMintUniV2Action(0, t.amount0User, t.amount1User, t.amount0Desired, t.amount1Desired, t.amount0Min, t.amount1Min),
 	];
 	
-	return execute(router, nftlp, borrower, MAX_UINT_256, actions);
+	return execute(router, nftlp, borrower, MAX_UINT_256, actions, true);
 }
 
-async function mintAndLeverageETH(router, nftlp, borrower, amountAUser, amountBUser, amountADesired, amountBDesired, amountAMin, amountBMin, permitData0, permitData1, A_IS_0, ETH_IS_0) {
+async function mintAndLeverageETH(router, nftlp, borrower, amountAUser, amountBUser, amountADesired, amountBDesired, amountAMin, amountBMin, A_IS_0, ETH_IS_0) {
 	const t = getAmounts({amountAUser, amountBUser, amountADesired, amountBDesired, amountAMin, amountBMin}, A_IS_0);
-	const permitDataA = A_IS_0 ? permitData0 : permitData1;
-	const permitDataB = A_IS_0 ? permitData1 : permitData0;
 	
 	let amountETH = ETH_IS_0 ? t.amount0User : t.amount1User;
 	
@@ -199,7 +194,7 @@ async function mintAndLeverageETH(router, nftlp, borrower, amountAUser, amountBU
 		await router.getWithdrawEthAction(borrower)	// refund only needed if we're not borrowing ETH
 	];
 	
-	return execute(router, nftlp, borrower, MAX_UINT_256, actions, amountETH);
+	return execute(router, nftlp, borrower, MAX_UINT_256, actions, true, amountETH);
 }
 
 async function deleverage(router, nftlp, borrower, tokenId, redeemTokens, amountAMin, amountBMin, permitData, A_IS_0) {
@@ -229,7 +224,73 @@ async function deleverage(router, nftlp, borrower, tokenId, redeemTokens, amount
 		);
 	}
 	
-	return execute(router, nftlp, borrower, tokenId, actions);
+	return execute(router, nftlp, borrower, tokenId, actions, false);
+}
+
+// UNI V3 ACTIONS
+
+async function mintCollateralETH(router, nftlp, borrower, tokenId, lpAmount, amountADesired, amountBDesired, amountAMin, amountBMin, A_IS_0, ETH_IS_0) {
+	const t = getAmounts({amountADesired, amountBDesired, amountAMin, amountBMin}, A_IS_0);
+	let amountETH = ETH_IS_0 ? t.amount0Desired : t.amount1Desired;
+	const actions = [
+		await router.getMintUniV2Action(lpAmount, t.amount0Desired, t.amount1Desired, t.amount0Min, t.amount1Min),
+		await router.getWithdrawEthAction(borrower)
+	];
+	if (tokenId*1==MAX_UINT_256*1) actions.unshift(await router.getMintUniV2EmptyAction());
+	
+	return execute(router, nftlp, borrower, tokenId, actions, false, amountETH);
+}
+
+async function mintCollateralETHUniV3(router, nftlp, borrower, tokenId, fee, tickLower, tickUpper, amountADesired, amountBDesired, amountAMin, amountBMin, A_IS_0, ETH_IS_0) {
+	const t = getAmounts({amountADesired, amountBDesired, amountAMin, amountBMin}, A_IS_0);
+	let amountETH = ETH_IS_0 ? t.amount0Desired : t.amount1Desired;
+	const actions = [
+		await router.getMintUniV3Action(t.amount0Desired, t.amount1Desired, t.amount0Min, t.amount1Min),
+		await router.getWithdrawEthAction(borrower)
+	];
+	if (tokenId*1==MAX_UINT_256*1) actions.unshift(await router.getMintUniV3EmptyAction(fee, tickLower, tickUpper));
+	
+	return execute(router, nftlp, borrower, tokenId, actions, false, amountETH);
+}
+
+async function getMintCollateralETHUniV3Action(router, borrower, tokenId, fee, tickLower, tickUpper, amountADesired, amountBDesired, amountAMin, amountBMin, A_IS_0, ETH_IS_0) {
+	const t = getAmounts({amountADesired, amountBDesired, amountAMin, amountBMin}, A_IS_0);
+	
+	const actions = [
+		await router.getMintUniV3Action(t.amount0Desired, t.amount1Desired, t.amount0Min, t.amount1Min),
+		await router.getWithdrawEthAction(borrower)
+	];
+	if (tokenId*1==MAX_UINT_256*1) actions.unshift(await router.getMintUniV3EmptyAction(fee, tickLower, tickUpper));
+	
+	return encodeActions(actions);
+}
+
+async function getMintAndLeverageETHUniV3Action(router, borrower, tokenId, fee, tickLower, tickUpper, amountAUser, amountBUser, amountADesired, amountBDesired, amountAMin, amountBMin, A_IS_0, ETH_IS_0) {
+	const t = getAmounts({amountAUser, amountBUser, amountADesired, amountBDesired, amountAMin, amountBMin}, A_IS_0);
+	
+	const actions = [
+		await router.getBorrowAndMintUniV3Action(t.amount0User, t.amount1User, t.amount0Desired, t.amount1Desired, t.amount0Min, t.amount1Min),
+		await router.getWithdrawEthAction(borrower)	// refund only needed if we're not borrowing ETH
+	];
+	if (tokenId*1==MAX_UINT_256*1) actions.unshift(await router.getMintUniV3EmptyAction(fee, tickLower, tickUpper));
+	
+	return encodeActions(actions);
+}
+
+async function getDeleverageETHUniV3Action(router, routerAddress, borrower, percentage, amountAMin, amountBMin, A_IS_0, ETH_IS_0) {	
+	// redeem collateral
+	// remove liqudity
+	// repay 
+	// refund
+	const t = getAmounts({amountAMin, amountBMin}, A_IS_0);
+	const actions = [
+		await router.getRedeemUniV3Action(percentage, t.amount0Min, t.amount1Min, routerAddress),
+		await router.getRepayRouterAction(0, MAX_UINT_256, ETH_IS_0 ? routerAddress : borrower),
+		await router.getRepayRouterAction(1, MAX_UINT_256, !ETH_IS_0 ? routerAddress : borrower),
+		await router.getWithdrawEthAction(borrower)
+	];
+	
+	return encodeActions(actions);
 }
 
 //EIP712
@@ -361,6 +422,10 @@ module.exports = {
 	mintAndLeverage,
 	mintAndLeverageETH,
 	deleverage,
+	mintCollateralETHUniV3,
+	getMintCollateralETHUniV3Action,
+	getMintAndLeverageETHUniV3Action,
+	getDeleverageETHUniV3Action,
 	getDomainSeparator,
 	getApprovalDigest,
 	getPermit,

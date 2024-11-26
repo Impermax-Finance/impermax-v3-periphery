@@ -105,7 +105,7 @@ contract('ImpermaxV3UniV2Router01', function (accounts) {
 	let liquidator = accounts[3];
 	
 	let uniswapV2Factory;
-	let tokenizedUniswapV2PositionFactory;
+	let tokenizedUniswapV2Factory;
 	let simpleUniswapOracle;
 	let impermaxFactory;
 	let WETH;
@@ -284,16 +284,16 @@ contract('ImpermaxV3UniV2Router01', function (accounts) {
 	
 	it('borrow', async () => {
 		//Borrow UNI
-		await expectRevert(borrow(router, nftlp, borrower, TOKEN_ID, ETH_IS_0 ? 1 : 0, UNI_BORROW_AMOUNT), "ImpermaxV3Borrowable: BORROW_NOT_ALLOWED");
-		const permitBorrowUNI = await permitGenerator.borrowPermit(borrowableUNI, borrower, router.address, UNI_BORROW_AMOUNT, DEADLINE);
+		await expectRevert(borrow(router, nftlp, borrower, TOKEN_ID, ETH_IS_0 ? 1 : 0, UNI_BORROW_AMOUNT), "ImpermaxERC721: UNAUTHORIZED");
+		const permitDataNft1 = await permitGenerator.nftPermit(collateral, borrower, router.address, TOKEN_ID, DEADLINE);
 		//await expectRevert(borrowETH(router, nftlp, borrower, TOKEN_ID, ETH_IS_0 ? 1 : 0, UNI_BORROW_AMOUNT), "ImpermaxRouter: UNEXPECTED_WETH_0_BALANCE");
 		await borrow(router, nftlp, borrower, TOKEN_ID, ETH_IS_0 ? 1 : 0, UNI_BORROW_AMOUNT);
 		expect(await UNI.balanceOf(borrower) * 1).to.eq(UNI_BORROW_AMOUNT * 1);
 		expect(await borrowableUNI.borrowBalance(TOKEN_ID) * 1).to.eq(UNI_BORROW_AMOUNT * 1);
 		
 		//Borrow ETH
-		await expectRevert(borrowETH(router, nftlp, borrower, TOKEN_ID, ETH_IS_0 ? 0 : 1, ETH_BORROW_AMOUNT), "ImpermaxV3Borrowable: BORROW_NOT_ALLOWED");
-		const permitBorrowETH = await permitGenerator.borrowPermit(borrowableWETH, borrower, router.address, ETH_BORROW_AMOUNT, DEADLINE);
+		await expectRevert(borrowETH(router, nftlp, borrower, TOKEN_ID, ETH_IS_0 ? 0 : 1, ETH_BORROW_AMOUNT), "ImpermaxERC721: UNAUTHORIZED");
+		const permitDataNft2 = await permitGenerator.nftPermit(collateral, borrower, router.address, TOKEN_ID, DEADLINE);
 		const op = borrowETH(router, nftlp, borrower, TOKEN_ID, ETH_IS_0 ? 0 : 1, ETH_BORROW_AMOUNT);
 		await checkETHBalance(op, borrower, ETH_BORROW_AMOUNT);
 		const borrowBalanceETH = ETH_BORROW_AMOUNT.mul(new BN(1001)).div(new BN(1000));
@@ -354,18 +354,15 @@ contract('ImpermaxV3UniV2Router01', function (accounts) {
 			'ImpermaxV3Borrowable: BORROW_NOT_ALLOWED'
 		);*/
 		
-		const permitBorrowUNIHigh = await permitGenerator.borrowPermit(borrowableUNI, borrower, router.address, UNI_LEVERAGE_AMOUNT_HIGH, DEADLINE);
-		const permitBorrowETHHigh = await permitGenerator.borrowPermit(borrowableWETH, borrower, router.address, ETH_LEVERAGE_AMOUNT_HIGH, DEADLINE);
+		const permitDataNft = await permitGenerator.nftPermit(collateral, borrower, router.address, TOKEN_ID, DEADLINE);
 		await expectRevert(
 			leverage(router, nftlp, borrower, TOKEN_ID, ETH_LEVERAGE_AMOUNT_HIGH, 
-				UNI_LEVERAGE_AMOUNT_HIGH, '0', '0', permitBorrowETHHigh, permitBorrowUNIHigh, ETH_IS_0), 
+				UNI_LEVERAGE_AMOUNT_HIGH, '0', '0', permitDataNft, ETH_IS_0), 
 			'ImpermaxV3Borrowable: INSUFFICIENT_LIQUIDITY'
 		);
 
 		const balancePrior = await nftlp.liquidity(TOKEN_ID);
-		const permitBorrowUNI = await permitGenerator.borrowPermit(borrowableUNI, borrower, router.address, UNI_LEVERAGE_AMOUNT, DEADLINE);
-		const permitBorrowETH = await permitGenerator.borrowPermit(borrowableWETH, borrower, router.address, ETH_LEVERAGE_AMOUNT, DEADLINE);
-		const receipt = await leverage(router, nftlp, borrower, TOKEN_ID, ETH_LEVERAGE_AMOUNT, UNI_LEVERAGE_AMOUNT, ETH_LEVERAGE_AMOUNT, EXPECTED_UNI_LEVERAGE_AMOUNT, permitBorrowETH, permitBorrowUNI, ETH_IS_0);
+		const receipt = await leverage(router, nftlp, borrower, TOKEN_ID, ETH_LEVERAGE_AMOUNT, UNI_LEVERAGE_AMOUNT, ETH_LEVERAGE_AMOUNT, EXPECTED_UNI_LEVERAGE_AMOUNT, permitDataNft, ETH_IS_0);
 		const balanceAfter = await nftlp.liquidity(TOKEN_ID);
 		const expectedDiff = LP_AMOUNT.mul(LEVERAGE.sub(new BN(1)));
 		//console.log(balancePrior / 1e18);
