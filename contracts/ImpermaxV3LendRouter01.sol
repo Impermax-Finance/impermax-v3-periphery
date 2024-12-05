@@ -5,6 +5,7 @@ import "./interfaces/IERC20.sol";
 import "./interfaces/IWETH.sol";
 import "./libraries/SafeMath.sol";
 import "./libraries/TransferHelper.sol";
+import "./libraries/ImpermaxPermit.sol";
 import "./impermax-v3-core/interfaces/IPoolToken.sol";
 import "./impermax-v3-core/interfaces/IBorrowable.sol";
 
@@ -14,13 +15,14 @@ contract ImpermaxV3LendRouter01 {
 	address public factory;
 	address public WETH;
 
-	modifier ensure(uint deadline) {
-		require(deadline >= block.timestamp, "ImpermaxRouter: EXPIRED");
-		_;
-	}
-
 	modifier checkETH(address poolToken) {
 		require(WETH == IPoolToken(poolToken).underlying(), "ImpermaxRouter: NOT_WETH");
+		_;
+	}
+	
+	modifier permit(bytes memory permitsData) {
+		ImpermaxPermit.Permit[] memory permits = abi.decode(permitsData, (ImpermaxPermit.Permit[]));
+		ImpermaxPermit.executePermits(permits);
 		_;
 	}
 	
@@ -43,22 +45,21 @@ contract ImpermaxV3LendRouter01 {
 		address to
 	) internal returns (uint tokens) {
 		if (from == address(this)) TransferHelper.safeTransfer(token, poolToken, amount);
-		else TransferHelper.safeTransferFrom(token, from, poolToken, amount);
+		else ImpermaxPermit.safeTransferFrom(token, from, poolToken, amount);
 		tokens = IPoolToken(poolToken).mint(to);
 	}
 	function mint(
 		address poolToken, 
 		uint amount,
 		address to,
-		uint deadline
-	) external ensure(deadline) returns (uint tokens) {
+		bytes calldata permitsData
+	) external permit(permitsData) returns (uint tokens) {
 		return _mint(poolToken, IPoolToken(poolToken).underlying(), amount, msg.sender, to);
 	}
 	function mintETH(
 		address poolToken, 
-		address to,
-		uint deadline
-	) external payable ensure(deadline) checkETH(poolToken) returns (uint tokens) {
+		address to
+	) external payable checkETH(poolToken) returns (uint tokens) {
 		IWETH(WETH).deposit.value(msg.value)();
 		return _mint(poolToken, WETH, msg.value, address(this), to);
 	}
@@ -69,10 +70,8 @@ contract ImpermaxV3LendRouter01 {
 		address poolToken,
 		uint tokens,
 		address to,
-		uint deadline,
-		bytes memory permitData
-	) public ensure(deadline) returns (uint amount) {
-		_permit(poolToken, tokens, deadline, permitData);
+		bytes memory permitsData
+	) public permit(permitsData) returns (uint amount) {
 		uint tokensBalance = IERC20(poolToken).balanceOf(msg.sender);
 		tokens = tokens < tokensBalance ? tokens : tokensBalance;
 		IPoolToken(poolToken).transferFrom(msg.sender, poolToken, tokens);
@@ -82,10 +81,8 @@ contract ImpermaxV3LendRouter01 {
 		address poolToken, 
 		uint tokens,
 		address to,
-		uint deadline,
-		bytes memory permitData
-	) public ensure(deadline) checkETH(poolToken) returns (uint amountETH) {
-		_permit(poolToken, tokens, deadline, permitData);
+		bytes memory permitsData
+	) public checkETH(poolToken) permit(permitsData) returns (uint amountETH) {
 		uint tokensBalance = IERC20(poolToken).balanceOf(msg.sender);
 		tokens = tokens < tokensBalance ? tokens : tokensBalance;
 		IPoolToken(poolToken).transferFrom(msg.sender, poolToken, tokens);
@@ -110,38 +107,23 @@ contract ImpermaxV3LendRouter01 {
 		uint tokenId,
 		uint amountMax,
 		address to,
-		uint deadline
-	) external ensure(deadline) returns (uint amount, uint seizeTokenId) {
+		bytes calldata permitsData
+	) external permit(permitsData) returns (uint amount, uint seizeTokenId) {
 		// TODO liquidate position underwater
 		amount = _repayAmount(borrowable, tokenId, amountMax);
-		TransferHelper.safeTransferFrom(IBorrowable(borrowable).underlying(), msg.sender, borrowable, amount);
+		ImpermaxPermit.safeTransferFrom(IBorrowable(borrowable).underlying(), msg.sender, borrowable, amount);
 		seizeTokenId = IBorrowable(borrowable).liquidate(tokenId, amount, to, "0x");
 	}
 	function liquidateETH(
 		address borrowable, 
 		uint tokenId,
-		address to,
-		uint deadline
-	) external payable ensure(deadline) checkETH(borrowable) returns (uint amountETH, uint seizeTokenId) {
+		address to
+	) external payable checkETH(borrowable) returns (uint amountETH, uint seizeTokenId) {
 		amountETH = _repayAmount(borrowable, tokenId, msg.value);
 		IWETH(WETH).deposit.value(amountETH)();
 		assert(IWETH(WETH).transfer(borrowable, amountETH));
 		seizeTokenId = IBorrowable(borrowable).liquidate(tokenId, amountETH, to, "0x");
 		// refund surpluss eth, if any
 		if (msg.value > amountETH) TransferHelper.safeTransferETH(msg.sender, msg.value - amountETH);
-	}
-		
-	/*** Utilities ***/
-	
-	function _permit(
-		address poolToken, 
-		uint amount, 
-		uint deadline,
-		bytes memory permitData
-	) internal {
-		if (permitData.length == 0) return;
-		(bool approveMax, uint8 v, bytes32 r, bytes32 s) = abi.decode(permitData, (bool, uint8, bytes32, bytes32));
-		uint value = approveMax ? uint(-1) : amount;
-		IPoolToken(poolToken).permit(msg.sender, address(this), value, deadline, v, r, s);
-	}
+	}	
 }

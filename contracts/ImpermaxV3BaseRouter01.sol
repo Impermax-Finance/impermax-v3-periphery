@@ -5,9 +5,11 @@ import "./interfaces/IERC20.sol";
 import "./interfaces/IERC721.sol";
 import "./interfaces/IWETH.sol";
 import "./interfaces/IV3BaseRouter01.sol";
+import "./interfaces/IAllowanceTransfer.sol";
 import "./libraries/Math.sol";
 import "./libraries/SafeMath.sol";
 import "./libraries/TransferHelper.sol";
+import "./libraries/ImpermaxPermit.sol";
 import "./impermax-v3-core/interfaces/IPoolToken.sol";
 import "./impermax-v3-core/interfaces/IBorrowable.sol";
 import "./impermax-v3-core/interfaces/IFactory.sol";
@@ -19,8 +21,9 @@ contract ImpermaxV3BaseRouter01 is IV3BaseRouter01, IImpermaxCallee {
 	address public factory;
 	address public WETH;
 
-	modifier ensure(uint deadline) {
-		require(deadline >= block.timestamp, "ImpermaxRouter: EXPIRED");
+	modifier permit(bytes memory permitsData) {
+		ImpermaxPermit.Permit[] memory permits = abi.decode(permitsData, (ImpermaxPermit.Permit[]));
+		ImpermaxPermit.executePermits(permits);
 		_;
 	}
 
@@ -115,7 +118,7 @@ contract ImpermaxV3BaseRouter01 is IV3BaseRouter01, IImpermaxCallee {
 		address borrowable = pool.borrowables[index];
 		uint repayAmount = _repayAmount(borrowable, tokenId, amountMax);
 		if (repayAmount == 0) return;
-		TransferHelper.safeTransferFrom(pool.tokens[index], msgSender, borrowable, repayAmount);
+		ImpermaxPermit.safeTransferFrom(pool.tokens[index], msgSender, borrowable, repayAmount);
 		IBorrowable(borrowable).borrow(tokenId, address(0), 0, new bytes(0));
 	}
 	function _repayRouter(
@@ -289,18 +292,14 @@ contract ImpermaxV3BaseRouter01 is IV3BaseRouter01, IImpermaxCallee {
 	function execute(
 		address nftlp,
 		uint tokenId,
-		uint deadline,
 		bytes calldata actionsData,
 		bytes calldata permitsData,
 		bool withCollateralTransfer
-	) external payable ensure(deadline) {
+	) external payable permit(permitsData) {
 		if (msg.value > 0) {
 			IWETH(WETH).deposit.value(msg.value)();
 		}
-		// TODO execute all permits -> ORA FACCIO QUESTO 
-		// parto da permit data object che supporta
-		// nft, permit1, permit2
-			
+		
 		Action[] memory actions = abi.decode(actionsData, (Action[]));
 		
 		LendingPool memory pool = getLendingPool(nftlp);
@@ -380,29 +379,6 @@ contract ImpermaxV3BaseRouter01 is IV3BaseRouter01, IImpermaxCallee {
 	}
 	
 	/*** Utilities ***/
-	
-	function _permit(
-		address poolToken, 
-		uint amount, 
-		uint deadline,
-		bytes memory permitData
-	) internal {
-		if (permitData.length == 0) return;
-		(bool approveMax, uint8 v, bytes32 r, bytes32 s) = abi.decode(permitData, (bool, uint8, bytes32, bytes32));
-		uint value = approveMax ? uint(-1) : amount;
-		IPoolToken(poolToken).permit(msg.sender, address(this), value, deadline, v, r, s);
-	}
-	function _nftPermit(
-		address erc721, 
-		uint tokenId, 
-		uint deadline,
-		bytes memory permitData
-	) internal {
-		if (permitData.length == 0) return;
-		// TOOD should I keep the bool to maintain the standard or should I remove it?
-		(, uint8 v, bytes32 r, bytes32 s) = abi.decode(permitData, (bool, uint8, bytes32, bytes32));
-		IERC721(erc721).permit(address(this), tokenId, deadline, v, r, s);
-	}
 	
 	function getBorrowable(address nftlp, uint8 index) public view returns (address borrowable) {
 		require(index < 2, "ImpermaxRouter: INDEX_TOO_HIGH");

@@ -9,7 +9,6 @@ interface IV3UniV3Router01 {
 	function execute(
 		address nftlp,
 		uint _tokenId,
-		uint deadline,
 		bytes calldata actionsData,
 		bytes calldata permitsData,
 		bool withCollateralTransfer

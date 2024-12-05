@@ -2,11 +2,7 @@ pragma solidity =0.5.16;
 pragma experimental ABIEncoderV2;
 
 import "./ImpermaxV3BaseRouter01.sol";
-import "./interfaces/IERC20.sol";
 import "./interfaces/IV3UniV3Router01.sol";
-import "./libraries/Math.sol";
-import "./libraries/SafeMath.sol";
-import "./libraries/TransferHelper.sol";
 import "./libraries/TickMath.sol";
 import "./libraries/LiquidityAmounts.sol";
 import "./impermax-v3-core/interfaces/ICollateral.sol";
@@ -15,8 +11,6 @@ import "./impermax-v3-core/extensions/interfaces/IUniswapV3Factory.sol";
 import "./impermax-v3-core/extensions/interfaces/IUniswapV3Pool.sol";
 
 contract ImpermaxV3UniV3Router01 is IV3UniV3Router01, ImpermaxV3BaseRouter01 {
-	using SafeMath for uint;
-
 	address public uniswapV3Factory;
 	
 	constructor(address _factory, address _uniswapV3Factory, address _WETH) public ImpermaxV3BaseRouter01(_factory, _WETH) {
@@ -350,8 +344,8 @@ contract ImpermaxV3UniV3Router01 is IV3UniV3Router01, ImpermaxV3BaseRouter01 {
 		uint amount0User = amount0Router < amount0Owed ? amount0Owed - amount0Router : 0;
 		uint amount1User = amount1Router < amount1Owed ? amount1Owed - amount1Router : 0;
 		
-		if (amount0User > 0) TransferHelper.safeTransferFrom(decoded.token0, decoded.msgSender, uniswapV3Pool, amount0User);
-		if (amount1User > 0) TransferHelper.safeTransferFrom(decoded.token1, decoded.msgSender, uniswapV3Pool, amount1User);
+		if (amount0User > 0) ImpermaxPermit.safeTransferFrom(decoded.token0, decoded.msgSender, uniswapV3Pool, amount0User);
+		if (amount1User > 0) ImpermaxPermit.safeTransferFrom(decoded.token1, decoded.msgSender, uniswapV3Pool, amount1User);
 		if (amount0Router > 0) TransferHelper.safeTransfer(decoded.token0, uniswapV3Pool, amount0Router);
 		if (amount1Router > 0) TransferHelper.safeTransfer(decoded.token1, uniswapV3Pool, amount1Router);
 	}

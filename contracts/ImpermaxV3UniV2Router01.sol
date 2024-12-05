@@ -2,18 +2,13 @@ pragma solidity =0.5.16;
 pragma experimental ABIEncoderV2;
 
 import "./ImpermaxV3BaseRouter01.sol";
-import "./interfaces/IERC20.sol";
 import "./interfaces/IUniswapV2Pair.sol";
 import "./interfaces/IV3UniV2Router01.sol";
-import "./libraries/Math.sol";
-import "./libraries/SafeMath.sol";
-import "./libraries/TransferHelper.sol";
 import "./libraries/UniswapV2Library.sol";
 import "./impermax-v3-core/interfaces/ICollateral.sol";
 import "./impermax-v3-core/extensions/interfaces/ITokenizedUniswapV2Position.sol";
 
 contract ImpermaxV3UniV2Router01 is IV3UniV2Router01, ImpermaxV3BaseRouter01 {
-	using SafeMath for uint;
 
 	constructor(address _factory, address _WETH) public ImpermaxV3BaseRouter01(_factory, _WETH) {}
 	
@@ -86,14 +81,14 @@ contract ImpermaxV3UniV2Router01 is IV3UniV2Router01, ImpermaxV3BaseRouter01 {
 		}
 		
 		// add liquidity to uniswap pair
-		if (amount0User > 0) TransferHelper.safeTransferFrom(pool.tokens[0], msgSender, uniswapV2Pair, amount0User);
-		if (amount1User > 0) TransferHelper.safeTransferFrom(pool.tokens[1], msgSender, uniswapV2Pair, amount1User);
+		if (amount0User > 0) ImpermaxPermit.safeTransferFrom(pool.tokens[0], msgSender, uniswapV2Pair, amount0User);
+		if (amount1User > 0) ImpermaxPermit.safeTransferFrom(pool.tokens[1], msgSender, uniswapV2Pair, amount1User);
 		if (amount0Router > 0) TransferHelper.safeTransfer(pool.tokens[0], uniswapV2Pair, amount0Router);
 		if (amount1Router > 0) TransferHelper.safeTransfer(pool.tokens[1], uniswapV2Pair, amount1Router);
 		// mint LP token
 		if (amount0User + amount0Router > 0) IUniswapV2Pair(uniswapV2Pair).mint(pool.nftlp);
 		// mint collateral
-		if (lpAmountUser > 0) TransferHelper.safeTransferFrom(uniswapV2Pair, msgSender, pool.nftlp, lpAmountUser);
+		if (lpAmountUser > 0) ImpermaxPermit.safeTransferFrom(uniswapV2Pair, msgSender, pool.nftlp, lpAmountUser);
 		uint tokenToJoin = ITokenizedUniswapV2Position(pool.nftlp).mint(address(this));
 		ITokenizedUniswapV2Position(pool.nftlp).join(tokenId, tokenToJoin);
 	}
