@@ -50,7 +50,7 @@ library ImpermaxPermit {
 	}
 		
 	function permit1(
-		address token, 
+		address token,
 		uint amount, 
 		uint deadline,
 		bytes memory signature
@@ -69,7 +69,7 @@ library ImpermaxPermit {
 		IERC721(erc721).permit(address(this), tokenId, deadline, v, r, s);
 	}
 	
-	function executePermit(Permit memory permit) internal {
+	function executePermit(Permit memory permit) public {
 		if (permit.permitType == PermitType.PERMIT1) {
 			Permit1Data memory decoded = abi.decode(permit.permitData, (Permit1Data));
 			permit1(
@@ -99,19 +99,24 @@ library ImpermaxPermit {
 		else revert("ImpermaxRouter: INVALID_PERMIT");
 	}
 	
-	function executePermits(Permit[] memory permits) internal {
+	function executePermits(Permit[] memory permits) public {
 		for (uint i = 0; i < permits.length; i++) {
 			executePermit(permits[i]);
 		}
 	}
 	
-	function safeTransferFrom(address token, address from, address to, uint256 value) internal {
+	function executePermits(bytes memory permitsData) public {
+		Permit[] memory permits = abi.decode(permitsData, (Permit[]));
+		executePermits(permits);
+	}
+	
+	function safeTransferFrom(address token, address from, address to, uint256 value) external {
 		uint allowance = IERC20(token).allowance(from, address(this));
 		if (allowance >= value) return TransferHelper.safeTransferFrom(token, from, to, value);
 		IAllowanceTransfer(PERMIT2_ADDRESS).transferFrom(from, to, safe160(value), token);
 	}
 	
-    function safe160(uint n) internal pure returns (uint160) {
+    function safe160(uint n) private pure returns (uint160) {
         require(n < 2**160, "Impermax: SAFE160");
         return uint160(n);
     }

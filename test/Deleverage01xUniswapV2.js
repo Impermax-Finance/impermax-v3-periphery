@@ -12,6 +12,7 @@ const {
 	encode,
 } = require('./Utils/Ethereum');
 const {
+	routerManager,
 	getAmounts,
 	encodePermits,
 	leverage,
@@ -37,8 +38,6 @@ const BDeployer = artifacts.require('BDeployer');
 const CDeployer = artifacts.require('CDeployer');
 const Collateral = artifacts.require('ImpermaxV3Collateral');
 const Borrowable = artifacts.require('ImpermaxV3Borrowable');
-const ImpermaxV3UniV2Router01 = artifacts.require('ImpermaxV3UniV2Router01');
-const ImpermaxV3LendRouter01 = artifacts.require('ImpermaxV3LendRouter01');
 const TokenizedUniswapV2Factory = artifacts.require('TokenizedUniswapV2Factory');
 const TokenizedUniswapV2Position = artifacts.require('TokenizedUniswapV2Position');
 const WETH9 = artifacts.require('WETH9');
@@ -120,14 +119,19 @@ contract('Deleverage01xUniswapV2', function (accounts) {
 		const borrowable1 = await Borrowable.at(borrowable1Address);
 		ETH_IS_A = await borrowable0.underlying() == WETH.address;
 		if (ETH_IS_A) [borrowableWETH, borrowableUNI] = [borrowable0, borrowable1];
-		else [borrowableWETH, borrowableUNI] = [borrowable1, borrowable0]
-		router = await ImpermaxV3UniV2Router01.new(impermaxFactory.address, WETH.address);
-		routerLend = await ImpermaxV3LendRouter01.new(impermaxFactory.address, WETH.address);
+		else [borrowableWETH, borrowableUNI] = [borrowable1, borrowable0];
 		await increaseTime(3700); // wait for oracle to be ready
 		await permitGenerator.initialize();
 		await UNI.approve(PERMIT2_ADDRESS, MAX_UINT_256, {from: lender});
 		await UNI.approve(PERMIT2_ADDRESS, MAX_UINT_256, {from: borrower});
 		await UNI.approve(PERMIT2_ADDRESS, MAX_UINT_256, {from: liquidator});
+		
+		// deploy routers
+		await routerManager.initialize();
+		await routerManager.initializePoolToken(WETH.address);
+		await routerManager.initializeUniV2(impermaxFactory.address, WETH.address);
+		router = routerManager.uniV2;
+		routerLend = routerManager.poolToken;
 		
 		//Mint UNI
 		const permit2UNIlend = await permitGenerator.permit2Single(UNI, lender, routerLend.address, UNI_LEND_AMOUNT, DEADLINE);

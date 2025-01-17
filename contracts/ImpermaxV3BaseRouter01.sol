@@ -10,6 +10,7 @@ import "./libraries/Math.sol";
 import "./libraries/SafeMath.sol";
 import "./libraries/TransferHelper.sol";
 import "./libraries/ImpermaxPermit.sol";
+import "./libraries/Actions.sol";
 import "./impermax-v3-core/interfaces/IPoolToken.sol";
 import "./impermax-v3-core/interfaces/IBorrowable.sol";
 import "./impermax-v3-core/interfaces/IFactory.sol";
@@ -22,8 +23,7 @@ contract ImpermaxV3BaseRouter01 is IV3BaseRouter01, IImpermaxCallee {
 	address public WETH;
 
 	modifier permit(bytes memory permitsData) {
-		ImpermaxPermit.Permit[] memory permits = abi.decode(permitsData, (ImpermaxPermit.Permit[]));
-		ImpermaxPermit.executePermits(permits);
+		ImpermaxPermit.executePermits(permitsData);
 		_;
 	}
 
@@ -36,38 +36,14 @@ contract ImpermaxV3BaseRouter01 is IV3BaseRouter01, IImpermaxCallee {
 		assert(msg.sender == WETH); // only accept ETH via fallback from the WETH contract
 	}
 	
-	
 	/*** Data Structures ***/
-	
-	// actions
-	struct BorrowData {
-		uint8 index;
-		uint amount;
-		address to;
-	}
-	struct RepayUserData {
-		uint8 index;
-		uint amountMax;
-	}
-	struct RepayRouterData {
-		uint8 index;
-		uint amountMax;
-		address refundTo;
-	}
-	struct WithdrawTokenData {
-		address token;
-		address to;
-	}
-	struct WithdrawEthData {
-		address to;
-	}
 	
 	// callbacks
 	struct BorrowCallbackData {
 		LendingPool pool;
 		uint8 borrowableIndex;
 		address msgSender;
-		Action nextAction;
+		Actions.Action nextAction;
 	}
 	struct RedeemCallbackData {
 		LendingPool pool;
@@ -75,7 +51,7 @@ contract ImpermaxV3BaseRouter01 is IV3BaseRouter01, IImpermaxCallee {
 		address redeemTo;
 		uint amount0Min;
 		uint amount1Min;
-		Action nextAction;
+		Actions.Action nextAction;
 	}
 	
 	/*** Primitive Actions ***/
@@ -87,9 +63,9 @@ contract ImpermaxV3BaseRouter01 is IV3BaseRouter01, IImpermaxCallee {
 		address msgSender,
 		uint amount,
 		address to,
-		Action memory nextAction
+		Actions.Action memory nextAction
 	) internal {
-		bytes memory encoded = nextAction.actionType == ActionType.NO_ACTION 
+		bytes memory encoded = nextAction.actionType == Actions.Type.NO_ACTION 
 			? bytes("")
 			: abi.encode(BorrowCallbackData({
 				pool: pool,
@@ -154,70 +130,6 @@ contract ImpermaxV3BaseRouter01 is IV3BaseRouter01, IImpermaxCallee {
 		IWETH(WETH).withdraw(routerBalance);
 		TransferHelper.safeTransferETH(to, routerBalance);
 	}
-	
-	/*** Action Getters ***/
-	
-	function _getAction(ActionType actionType, bytes memory actionData) internal pure returns (Action memory) {
-		return Action({
-			actionType: actionType,
-			actionData: actionData,
-			nextAction: bytes("")
-		});
-	}
-	
-	function getNoAction() internal pure returns (Action memory) {
-		return _getAction(ActionType.NO_ACTION, bytes(""));
-	}
-	
-	function getBorrowAction(uint8 index, uint amount, address to) public pure returns (Action memory) {
-		return _getAction(ActionType.BORROW, abi.encode(BorrowData({
-			index: index,
-			amount: amount,
-			to: to
-		})));
-	}
-	
-	function getRepayUserAction(uint8 index, uint amountMax) public pure returns (Action memory) {
-		return _getAction(ActionType.REPAY_USER, abi.encode(RepayUserData({
-			index: index,
-			amountMax: amountMax
-		})));
-	}
-	function getRepayRouterAction(uint8 index, uint amountMax, address refundTo) public pure returns (Action memory) {
-		return _getAction(ActionType.REPAY_ROUTER, abi.encode(RepayRouterData({
-			index: index,
-			amountMax: amountMax,
-			refundTo: refundTo
-		})));
-	}
-	
-	function getWithdrawTokenAction(address token, address to) public pure returns (Action memory) {
-		return _getAction(ActionType.WITHDRAW_TOKEN, abi.encode(WithdrawTokenData({
-			token: token,
-			to: to
-		})));
-	}
-	
-	function getWithdrawEthAction(address to) public pure returns (Action memory) {
-		return _getAction(ActionType.WITHDRAW_ETH, abi.encode(WithdrawEthData({
-			to: to
-		})));
-	}
-	
-	
-	/*** Actions sorter: sorts actions and composite actions ***/
-	
-	function _actionsSorter(Action[] memory actions, Action memory nextAction) internal pure returns (Action memory) {
-		require(actions.length > 0, "Router01V3xUniswapV2: UNEXPECTED_ACTIONS_LENGTH");
-		actions[actions.length-1].nextAction = abi.encode(nextAction);
-		for(uint i = actions.length-1; i > 0; i--) {
-			actions[i-1].nextAction = abi.encode(actions[i]);
-		}
-		return actions[0];
-	}
-	function _actionsSorter(Action[] memory actions) internal pure returns (Action memory) {
-		return _actionsSorter(actions, getNoAction());
-	}
 
 	/*** EXECUTE ***/
 	
@@ -225,12 +137,12 @@ contract ImpermaxV3BaseRouter01 is IV3BaseRouter01, IImpermaxCallee {
 		LendingPool memory pool,
 		uint tokenId,
 		address msgSender,
-		Action memory action
+		Actions.Action memory action
 	) internal returns (uint) {
-		if (action.actionType == ActionType.NO_ACTION) return tokenId;
-		Action memory nextAction = abi.decode(action.nextAction, (Action));
-		if (action.actionType == ActionType.BORROW) {
-			BorrowData memory decoded = abi.decode(action.actionData, (BorrowData));
+		if (action.actionType == Actions.Type.NO_ACTION) return tokenId;
+		Actions.Action memory nextAction = abi.decode(action.nextAction, (Actions.Action));
+		if (action.actionType == Actions.Type.BORROW) {
+			Actions.BorrowData memory decoded = abi.decode(action.actionData, (Actions.BorrowData));
 			_borrow(
 				pool,
 				decoded.index,
@@ -242,8 +154,8 @@ contract ImpermaxV3BaseRouter01 is IV3BaseRouter01, IImpermaxCallee {
 			);
 			return tokenId;
 		}
-		else if (action.actionType == ActionType.REPAY_USER) {
-			RepayUserData memory decoded = abi.decode(action.actionData, (RepayUserData));
+		else if (action.actionType == Actions.Type.REPAY_USER) {
+			Actions.RepayUserData memory decoded = abi.decode(action.actionData, (Actions.RepayUserData));
 			_repayUser(
 				pool,
 				decoded.index,
@@ -252,8 +164,8 @@ contract ImpermaxV3BaseRouter01 is IV3BaseRouter01, IImpermaxCallee {
 				decoded.amountMax
 			);
 		}
-		else if (action.actionType == ActionType.REPAY_ROUTER) {
-			RepayRouterData memory decoded = abi.decode(action.actionData, (RepayRouterData));
+		else if (action.actionType == Actions.Type.REPAY_ROUTER) {
+			Actions.RepayRouterData memory decoded = abi.decode(action.actionData, (Actions.RepayRouterData));
 			_repayRouter(
 				pool,
 				decoded.index,
@@ -262,15 +174,15 @@ contract ImpermaxV3BaseRouter01 is IV3BaseRouter01, IImpermaxCallee {
 				decoded.refundTo
 			);
 		}
-		else if (action.actionType == ActionType.WITHDRAW_TOKEN) {
-			WithdrawTokenData memory decoded = abi.decode(action.actionData, (WithdrawTokenData));
+		else if (action.actionType == Actions.Type.WITHDRAW_TOKEN) {
+			Actions.WithdrawTokenData memory decoded = abi.decode(action.actionData, (Actions.WithdrawTokenData));
 			_withdrawToken(
 				decoded.token,
 				decoded.to
 			);
 		}
-		else if (action.actionType == ActionType.WITHDRAW_ETH) {
-			WithdrawEthData memory decoded = abi.decode(action.actionData, (WithdrawEthData));
+		else if (action.actionType == Actions.Type.WITHDRAW_ETH) {
+			Actions.WithdrawEthData memory decoded = abi.decode(action.actionData, (Actions.WithdrawEthData));
 			_withdrawEth(
 				decoded.to
 			);
@@ -287,7 +199,7 @@ contract ImpermaxV3BaseRouter01 is IV3BaseRouter01, IImpermaxCallee {
 	
 	/*** External ***/
 	
-	function _checkFirstAction(ActionType actionType) internal; 
+	function _checkFirstAction(Actions.Type actionType) internal; 
 	
 	function execute(
 		address nftlp,
@@ -300,7 +212,7 @@ contract ImpermaxV3BaseRouter01 is IV3BaseRouter01, IImpermaxCallee {
 			IWETH(WETH).deposit.value(msg.value)();
 		}
 		
-		Action[] memory actions = abi.decode(actionsData, (Action[]));
+		Actions.Action[] memory actions = abi.decode(actionsData, (Actions.Action[]));
 		
 		LendingPool memory pool = getLendingPool(nftlp);
 		if (tokenId != uint(-1)) {
@@ -318,7 +230,7 @@ contract ImpermaxV3BaseRouter01 is IV3BaseRouter01, IImpermaxCallee {
 			pool,
 			tokenId,
 			msg.sender,
-			_actionsSorter(actions)
+			Actions.actionsSorter(actions)
 		);
 		
 		if (withCollateralTransfer) {

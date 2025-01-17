@@ -12,6 +12,7 @@ const {
 	encode,
 } = require('./Utils/Ethereum');
 const {
+	routerManager,
 	getAmounts,
 	encodePermits,
 	mintCollateral,
@@ -45,8 +46,6 @@ const BDeployer = artifacts.require('BDeployer');
 const CDeployer = artifacts.require('CDeployer');
 const Collateral = artifacts.require('ImpermaxV3Collateral');
 const Borrowable = artifacts.require('ImpermaxV3Borrowable');
-const ImpermaxV3UniV2Router01 = artifacts.require('ImpermaxV3UniV2Router01');
-const ImpermaxV3LendRouter01 = artifacts.require('ImpermaxV3LendRouter01');
 const TokenizedUniswapV2Factory = artifacts.require('TokenizedUniswapV2Factory');
 const TokenizedUniswapV2Position = artifacts.require('TokenizedUniswapV2Position');
 const WETH9 = artifacts.require('WETH9');
@@ -159,13 +158,18 @@ contract('ImpermaxV3UniV2Router01', function (accounts) {
 		ETH_IS_0 = await borrowable0.underlying() == WETH.address;
 		if (ETH_IS_0) [borrowableWETH, borrowableUNI] = [borrowable0, borrowable1];
 		else [borrowableWETH, borrowableUNI] = [borrowable1, borrowable0]
-		router = await ImpermaxV3UniV2Router01.new(impermaxFactory.address, WETH.address);
-		routerLend = await ImpermaxV3LendRouter01.new(impermaxFactory.address, WETH.address);
 		await increaseTime(3700); // wait for oracle to be ready
 		await permitGenerator.initialize();
 		await UNI.approve(PERMIT2_ADDRESS, MAX_UINT_256, {from: lender});
 		await UNI.approve(PERMIT2_ADDRESS, MAX_UINT_256, {from: borrower});
 		await UNI.approve(PERMIT2_ADDRESS, MAX_UINT_256, {from: liquidator});
+		
+		// deploy routers
+		await routerManager.initialize();
+		await routerManager.initializePoolToken(WETH.address);
+		await routerManager.initializeUniV2(impermaxFactory.address, WETH.address);
+		router = routerManager.uniV2;
+		routerLend = routerManager.poolToken;
 	});
 	
 	// TODO REPEAT TEST TO TEST CHECKOWNERNFT
@@ -376,7 +380,7 @@ contract('ImpermaxV3UniV2Router01', function (accounts) {
 		expect(await borrowableWETH.borrowBalance(TOKEN_ID) * 1).to.eq(ETH_LEVERAGE_AMOUNT * 1);
 	});
 	
-	it('liquidate', async () => {
+	/*it('liquidate', async () => {
 		// Change oracle price
 		await UNI.mint(uniswapV2Pair.address, UNI_BUY);
 		await uniswapV2Pair.swap(ETH_IS_0 ? ETH_BOUGHT : '0', ETH_IS_0 ? '0' : ETH_BOUGHT, address(0), '0x');
@@ -431,7 +435,7 @@ contract('ImpermaxV3UniV2Router01', function (accounts) {
 		expectAlmostEqualMantissa(liquidateUNIResult2.amount, expectedUNIAmount);
 		const op2 = routerLend.liquidateETH(borrowableWETH.address, TOKEN_ID, liquidator, {value: ETH_LIQUIDATE_AMOUNT2, from: liquidator});
 		await checkETHBalance(op2, liquidator, expectedETHAmount, true);
-	});
+	});*/
 	
 	// TODO REWRITE THESE 2 FUNCTIONS
 	/*it('impermaxBorrow is forbidden to non-borrowable', async () => {

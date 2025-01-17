@@ -14,6 +14,7 @@ interface ITokenizedUniswapV3Position {
 	
 	// INFTLP
 	
+	function factory() external view returns (address);
 	function token0() external view returns (address);
 	function token1() external view returns (address);
 	function getPositionData(uint256 _tokenId, uint256 _safetyMarginSqrt) external returns (
@@ -26,7 +27,6 @@ interface ITokenizedUniswapV3Position {
 	
 	// ITokenizedUniswapV3Position
 	
-	function factory() external view returns (address);
 	function uniswapV3Factory() external view returns (address);
 	
 	function totalBalance(uint24 fee, int24 tickLower, int24 tickUpper) external view returns (uint256);

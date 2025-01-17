@@ -9,10 +9,9 @@ import "./libraries/ImpermaxPermit.sol";
 import "./impermax-v3-core/interfaces/IPoolToken.sol";
 import "./impermax-v3-core/interfaces/IBorrowable.sol";
 
-contract ImpermaxV3LendRouter01 {
+contract PoolTokenRouter01 {
 	using SafeMath for uint;
 
-	address public factory;
 	address public WETH;
 
 	modifier checkETH(address poolToken) {
@@ -21,13 +20,11 @@ contract ImpermaxV3LendRouter01 {
 	}
 	
 	modifier permit(bytes memory permitsData) {
-		ImpermaxPermit.Permit[] memory permits = abi.decode(permitsData, (ImpermaxPermit.Permit[]));
-		ImpermaxPermit.executePermits(permits);
+		ImpermaxPermit.executePermits(permitsData);
 		_;
 	}
 	
-	constructor(address _factory, address _WETH) public {
-		factory = _factory;
+	constructor(address _WETH) public {
 		WETH = _WETH;
 	}
 
@@ -90,40 +87,4 @@ contract ImpermaxV3LendRouter01 {
 		IWETH(WETH).withdraw(amountETH);
 		TransferHelper.safeTransferETH(to, amountETH);
 	}
-
-	/*** Liquidate ***/
-	
-	function _repayAmount(
-		address borrowable,
-		uint tokenId, 
-		uint amountMax
-	) internal returns (uint amount) {
-		IBorrowable(borrowable).accrueInterest();
-		uint borrowedAmount = IBorrowable(borrowable).borrowBalance(tokenId);
-		amount = amountMax < borrowedAmount ? amountMax : borrowedAmount;
-	}
-	function liquidate(
-		address borrowable, 
-		uint tokenId,
-		uint amountMax,
-		address to,
-		bytes calldata permitsData
-	) external permit(permitsData) returns (uint amount, uint seizeTokenId) {
-		// TODO liquidate position underwater
-		amount = _repayAmount(borrowable, tokenId, amountMax);
-		ImpermaxPermit.safeTransferFrom(IBorrowable(borrowable).underlying(), msg.sender, borrowable, amount);
-		seizeTokenId = IBorrowable(borrowable).liquidate(tokenId, amount, to, "0x");
-	}
-	function liquidateETH(
-		address borrowable, 
-		uint tokenId,
-		address to
-	) external payable checkETH(borrowable) returns (uint amountETH, uint seizeTokenId) {
-		amountETH = _repayAmount(borrowable, tokenId, msg.value);
-		IWETH(WETH).deposit.value(amountETH)();
-		assert(IWETH(WETH).transfer(borrowable, amountETH));
-		seizeTokenId = IBorrowable(borrowable).liquidate(tokenId, amountETH, to, "0x");
-		// refund surpluss eth, if any
-		if (msg.value > amountETH) TransferHelper.safeTransferETH(msg.sender, msg.value - amountETH);
-	}	
 }

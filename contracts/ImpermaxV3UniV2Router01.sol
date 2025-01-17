@@ -3,46 +3,13 @@ pragma experimental ABIEncoderV2;
 
 import "./ImpermaxV3BaseRouter01.sol";
 import "./interfaces/IUniswapV2Pair.sol";
-import "./interfaces/IV3UniV2Router01.sol";
 import "./libraries/UniswapV2Library.sol";
 import "./impermax-v3-core/interfaces/ICollateral.sol";
 import "./impermax-v3-core/extensions/interfaces/ITokenizedUniswapV2Position.sol";
 
-contract ImpermaxV3UniV2Router01 is IV3UniV2Router01, ImpermaxV3BaseRouter01 {
+contract ImpermaxV3UniV2Router01 is ImpermaxV3BaseRouter01 {
 
 	constructor(address _factory, address _WETH) public ImpermaxV3BaseRouter01(_factory, _WETH) {}
-	
-	/*** Data Structures ***/
-	
-	struct MintUniV2InternalData {
-		uint lpAmountUser;
-		uint amount0User;
-		uint amount1User;
-		uint amount0Router;
-		uint amount1Router;
-	}
-	struct MintUniV2Data {
-		uint lpAmountUser;
-		uint amount0Desired;
-		uint amount1Desired;
-		uint amount0Min;
-		uint amount1Min;
-	}
-	struct RedeemUniV2Data {
-		uint percentage;
-		uint amount0Min;
-		uint amount1Min;
-		address to;
-	}
-	struct BorrowAndMintUniV2Data {
-		uint lpAmountUser;
-		uint amount0User;
-		uint amount1User;
-		uint amount0Desired;
-		uint amount1Desired;
-		uint amount0Min;
-		uint amount1Min;
-	}
 	
 	/*** Primitive Actions ***/
 	
@@ -115,7 +82,7 @@ contract ImpermaxV3UniV2Router01 is IV3UniV2Router01, ImpermaxV3BaseRouter01 {
 		uint amount0Min,
 		uint amount1Min,
 		address to,
-		Action memory nextAction
+		Actions.Action memory nextAction
 	) internal {
 		require(percentage > 0, "ImpermaxRouter: REDEEM_ZERO");
 		bytes memory encoded = abi.encode(RedeemCallbackData({
@@ -142,38 +109,6 @@ contract ImpermaxV3UniV2Router01 is IV3UniV2Router01, ImpermaxV3BaseRouter01 {
 		require(amount1 >= amount1Min, "ImpermaxRouter: INSUFFICIENT_1_AMOUNT");
 	}
 	
-	/*** Action Getters ***/
-	
-	function getMintUniV2EmptyAction() public pure returns (Action memory) {
-		return _getAction(ActionType.MINT_UNIV2_EMPTY, bytes(""));
-	}
-	function getMintUniV2InternalAction(uint lpAmountUser, uint amount0User, uint amount1User, uint amount0Router, uint amount1Router) internal pure returns (Action memory) {
-		return _getAction(ActionType.MINT_UNIV2_INTERNAL, abi.encode(MintUniV2InternalData({
-			lpAmountUser: lpAmountUser,
-			amount0User: amount0User,
-			amount1User: amount1User,
-			amount0Router: amount0Router,
-			amount1Router: amount1Router
-		})));
-	}
-	function getMintUniV2Action(uint lpAmountUser, uint amount0Desired, uint amount1Desired, uint amount0Min, uint amount1Min) public pure returns (Action memory) {
-		return _getAction(ActionType.MINT_UNIV2, abi.encode(MintUniV2Data({
-			lpAmountUser: lpAmountUser,
-			amount0Desired: amount0Desired,
-			amount1Desired: amount1Desired,
-			amount0Min: amount0Min,
-			amount1Min: amount1Min
-		})));
-	}
-	
-	function getRedeemUniV2Action(uint percentage, uint amount0Min, uint amount1Min, address to) public pure returns (Action memory) {
-		return _getAction(ActionType.REDEEM_UNIV2, abi.encode(RedeemUniV2Data({
-			percentage: percentage,
-			amount0Min: amount0Min,
-			amount1Min: amount1Min,
-			to: to
-		})));
-	}
 	
 	/*** Composite Actions ***/
 	
@@ -186,7 +121,7 @@ contract ImpermaxV3UniV2Router01 is IV3UniV2Router01, ImpermaxV3BaseRouter01 {
 		uint amount1Desired,	// intended as user amount + router amount
 		uint amount0Min,		// intended as user amount + router amount
 		uint amount1Min			// intended as user amount + router amount
-	) internal view returns (Action[] memory a) {
+	) internal view returns (Actions.Action[] memory a) {
 		address uniswapV2Pair = ITokenizedUniswapV2Position(pool.nftlp).underlying();
 		(uint amount0, uint amount1) = _optimalLiquidityUniV2(uniswapV2Pair, amount0Desired, amount1Desired, amount0Min, amount1Min);
 		(uint amount0Router, uint amount1Router) = (
@@ -194,29 +129,10 @@ contract ImpermaxV3UniV2Router01 is IV3UniV2Router01, ImpermaxV3BaseRouter01 {
 			amount1 > amount1User ? amount1 - amount1User : 0
 		);
 
-		a = new Action[](3);		
-		a[0] = getBorrowAction(0, amount0Router, address(this));
-		a[1] = getBorrowAction(1, amount1Router, address(this));
-		a[2] = getMintUniV2InternalAction(lpAmountUser, amount0 - amount0Router, amount1 - amount1Router, amount0Router, amount1Router);
-	}
-	function getBorrowAndMintUniV2Action(
-		uint lpAmountUser,
-		uint amount0User,
-		uint amount1User,
-		uint amount0Desired,	// intended as user amount + router amount
-		uint amount1Desired,	// intended as user amount + router amount
-		uint amount0Min,		// intended as user amount + router amount
-		uint amount1Min			// intended as user amount + router amount
-	) external pure returns (Action memory) {
-		return _getAction(ActionType.BORROW_AND_MINT_UNIV2, abi.encode(BorrowAndMintUniV2Data({
-			lpAmountUser: lpAmountUser,
-			amount0User: amount0User,
-			amount1User: amount1User,
-			amount0Desired: amount0Desired,
-			amount1Desired: amount1Desired,
-			amount0Min: amount0Min,
-			amount1Min: amount1Min
-		})));
+		a = new Actions.Action[](3);		
+		a[0] = Actions.getBorrowAction(0, amount0Router, address(this));
+		a[1] = Actions.getBorrowAction(1, amount1Router, address(this));
+		a[2] = Actions.getMintUniV2InternalAction(lpAmountUser, amount0 - amount0Router, amount1 - amount1Router, amount0Router, amount1Router);
 	}
 	
 	/*** EXECUTE ***/
@@ -225,15 +141,15 @@ contract ImpermaxV3UniV2Router01 is IV3UniV2Router01, ImpermaxV3BaseRouter01 {
 		LendingPool memory pool,
 		uint tokenId,
 		address msgSender,
-		Action memory action
+		Actions.Action memory action
 	) internal returns (uint) {
-		if (action.actionType == ActionType.NO_ACTION) return tokenId;
-		Action memory nextAction = abi.decode(action.nextAction, (Action));
-		if (action.actionType == ActionType.MINT_UNIV2_EMPTY) {
+		if (action.actionType == Actions.Type.NO_ACTION) return tokenId;
+		Actions.Action memory nextAction = abi.decode(action.nextAction, (Actions.Action));
+		if (action.actionType == Actions.Type.MINT_UNIV2_EMPTY) {
 			tokenId = _mintUniV2Empty(pool);
 		}
-		else if (action.actionType == ActionType.MINT_UNIV2_INTERNAL) {
-			MintUniV2InternalData memory decoded = abi.decode(action.actionData, (MintUniV2InternalData));
+		else if (action.actionType == Actions.Type.MINT_UNIV2_INTERNAL) {
+			Actions.MintUniV2InternalData memory decoded = abi.decode(action.actionData, (Actions.MintUniV2InternalData));
 			_mintUniV2Internal(
 				pool,
 				tokenId,
@@ -245,8 +161,8 @@ contract ImpermaxV3UniV2Router01 is IV3UniV2Router01, ImpermaxV3BaseRouter01 {
 				decoded.amount1Router
 			);
 		}
-		else if (action.actionType == ActionType.MINT_UNIV2) {
-			MintUniV2Data memory decoded = abi.decode(action.actionData, (MintUniV2Data));
+		else if (action.actionType == Actions.Type.MINT_UNIV2) {
+			Actions.MintUniV2Data memory decoded = abi.decode(action.actionData, (Actions.MintUniV2Data));
 			_mintUniV2(
 				pool,
 				tokenId,
@@ -258,8 +174,8 @@ contract ImpermaxV3UniV2Router01 is IV3UniV2Router01, ImpermaxV3BaseRouter01 {
 				decoded.amount1Min
 			);
 		}
-		else if (action.actionType == ActionType.REDEEM_UNIV2) {
-			RedeemUniV2Data memory decoded = abi.decode(action.actionData, (RedeemUniV2Data));
+		else if (action.actionType == Actions.Type.REDEEM_UNIV2) {
+			Actions.RedeemUniV2Data memory decoded = abi.decode(action.actionData, (Actions.RedeemUniV2Data));
 			_redeemUniV2Step1(
 				pool,
 				tokenId,
@@ -272,9 +188,9 @@ contract ImpermaxV3UniV2Router01 is IV3UniV2Router01, ImpermaxV3BaseRouter01 {
 			);
 			return tokenId;
 		}
-		else if (action.actionType == ActionType.BORROW_AND_MINT_UNIV2) {
-			BorrowAndMintUniV2Data memory decoded = abi.decode(action.actionData, (BorrowAndMintUniV2Data));
-			Action[] memory actions = _borrowAndMintUniV2(
+		else if (action.actionType == Actions.Type.BORROW_AND_MINT_UNIV2) {
+			Actions.BorrowAndMintUniV2Data memory decoded = abi.decode(action.actionData, (Actions.BorrowAndMintUniV2Data));
+			Actions.Action[] memory actions = _borrowAndMintUniV2(
 				pool,
 				decoded.lpAmountUser,
 				decoded.amount0User,
@@ -284,7 +200,7 @@ contract ImpermaxV3UniV2Router01 is IV3UniV2Router01, ImpermaxV3BaseRouter01 {
 				decoded.amount0Min,
 				decoded.amount1Min
 			);
-			nextAction = _actionsSorter(actions, nextAction);
+			nextAction = Actions.actionsSorter(actions, nextAction);
 		}
 		else return super._execute(pool, tokenId, msgSender, action);
 		
@@ -296,8 +212,8 @@ contract ImpermaxV3UniV2Router01 is IV3UniV2Router01, ImpermaxV3BaseRouter01 {
 		);
 	}
 	
-	function _checkFirstAction(ActionType actionType) internal {
-		require(actionType == ActionType.MINT_UNIV2_EMPTY, "ImpermaxRouter: INVALID_FIRST_ACTION");
+	function _checkFirstAction(Actions.Type actionType) internal {
+		require(actionType == Actions.Type.MINT_UNIV2_EMPTY, "ImpermaxRouter: INVALID_FIRST_ACTION");
 	}
 	
 	/*** Utilities ***/
