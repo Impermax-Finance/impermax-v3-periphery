@@ -28,7 +28,6 @@ contract BStorage {
 	uint public kinkUtilizationRate = 0.75e18; //75%
 	uint public adjustSpeed = 5.787037e12; //50% per day
 	uint public debtCeiling = uint(-1);
-	address public borrowTracker;
 
     function safe112(uint n) internal pure returns (uint112) {
         require(n < 2**112, "Impermax: SAFE112");

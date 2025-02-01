@@ -80,6 +80,7 @@ contract PoolToken is IPoolToken, ImpermaxERC20 {
 	// same safe transfer function used by UniSwapV2 (with fixed underlying)
 	bytes4 private constant SELECTOR = bytes4(keccak256(bytes("transfer(address,uint256)")));
 	function _safeTransfer(address to, uint amount) internal {
+		require(underlying != address(0), "PoolToken: NOT_INITIALIZED");
 		(bool success, bytes memory data) = underlying.call(abi.encodeWithSelector(SELECTOR, to, amount));
 		require(success && (data.length == 0 || abi.decode(data, (bool))), "PoolToken: TRANSFER_FAILED");
 	}

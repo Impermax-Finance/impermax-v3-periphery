@@ -26,6 +26,23 @@ library UniswapV3WeightedOracleLibrary {
         secondsAgos[0] = period;
         secondsAgos[1] = 0;
 
+/*
+        // check if the pool has enough observations to observe over period
+        (,,uint16 observationIndex, uint16 observationCardinality,,,) = IUniswapV3Pool(pool).slot0();
+        observationIndex++;
+        if (observationIndex == observationCardinality) observationIndex = 0;
+        (uint32 firstTimestamp,,,) = IUniswapV3Pool(pool).observations(observationIndex);
+        uint32 periodAvailable = uint32(block.timestamp) - firstTimestamp;
+		// NON POSSIAMO FARE COSI
+		// MANIPULATION EXPLOIT
+		// Idea -> invece che fare sta puttanata, uso period veriabile
+		// max period è T_ORACLE, period = Math.max(maxPeriod, periodAvailable)
+        if (period > periodAvailable) return PeriodObservation({
+            arithmeticMeanTick: 0,
+            harmonicMeanLiquidity: 0
+        });
+		*/
+
         (int56[] memory tickCumulatives, uint160[] memory secondsPerLiquidityCumulativeX128s) = IUniswapV3Pool(pool).observe(secondsAgos);
         int56 tickCumulativesDelta = tickCumulatives[1] - tickCumulatives[0];
         uint160 secondsPerLiquidityCumulativesDelta = secondsPerLiquidityCumulativeX128s[1] - secondsPerLiquidityCumulativeX128s[0];
@@ -59,6 +76,8 @@ library UniswapV3WeightedOracleLibrary {
             numerator += int256(observations[i].harmonicMeanLiquidity) * observations[i].arithmeticMeanTick;
             denominator += observations[i].harmonicMeanLiquidity;
         }
+
+        //require(denominator > 0, "Impermax: CANT_CALCULATE_TWAP");
 
         arithmeticMeanWeightedTick = int24(numerator / int256(denominator));
 

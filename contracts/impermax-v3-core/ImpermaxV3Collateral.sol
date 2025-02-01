@@ -36,7 +36,7 @@ contract ImpermaxV3Collateral is ICollateral, CSetter {
 	/*** ERC721 Wrapper ***/
 	
 	function mint(address to, uint256 tokenId) external nonReentrant {
-		require(ownerOf[tokenId] == address(0), "ImpermaxV3Collateral: NFT_ALREADY_MINTED");
+		require(_ownerOf[tokenId] == address(0), "ImpermaxV3Collateral: NFT_ALREADY_MINTED");
 		require(INFTLP(underlying).ownerOf(tokenId) == address(this), "ImpermaxV3Collateral: NFT_NOT_RECEIVED");
 		_mint(to, tokenId);
 		emit Mint(to, tokenId);
@@ -44,7 +44,7 @@ contract ImpermaxV3Collateral is ICollateral, CSetter {
 
 	function redeem(address to, uint256 tokenId, uint256 percentage, bytes memory data) public nonReentrant returns (uint256 redeemTokenId) {
 		require(percentage <= 1e18, "ImpermaxV3Collateral: PERCENTAGE_ABOVE_100");
-		_checkAuthorized(ownerOf[tokenId], msg.sender, tokenId);
+		_checkAuthorized(_requireOwned(tokenId), msg.sender, tokenId);
 		_approve(address(0), tokenId, address(0)); // reset approval
 				
 		// optimistically redeem
@@ -88,6 +88,7 @@ contract ImpermaxV3Collateral is ICollateral, CSetter {
 		address _borrowable0 = borrowable0;
 		address _borrowable1 = borrowable1;
 		require(borrowable == _borrowable0 || borrowable == _borrowable1, "ImpermaxV3Collateral: INVALID_BORROWABLE");
+		require(INFTLP(underlying).ownerOf(tokenId) == address(this), "ImpermaxV3Collateral: INVALID_NFTLP_ID");
 		
 		uint debtX = borrowable == _borrowable0 ? accountBorrows : uint(-1);
 		uint debtY = borrowable == _borrowable1 ? accountBorrows : uint(-1);
@@ -102,8 +103,8 @@ contract ImpermaxV3Collateral is ICollateral, CSetter {
 		require(postLiquidationCollateralRatio < 1e18, "ImpermaxV3Collateral: NOT_UNDERWATER");
 		IBorrowable(borrowable0).restructureDebt(tokenId, postLiquidationCollateralRatio);
 		IBorrowable(borrowable1).restructureDebt(tokenId, postLiquidationCollateralRatio);
-		positionObject = _getPositionObject(tokenId);
-		assert(!positionObject.isUnderwater());
+		
+		blockOfLastRestructureOrLiquidation[tokenId] = block.number;
 		
 		emit RestructureBadDebt(tokenId, postLiquidationCollateralRatio);
 	}
@@ -116,8 +117,11 @@ contract ImpermaxV3Collateral is ICollateral, CSetter {
 		{
 			CollateralMath.PositionObject memory positionObject = _getPositionObject(tokenId);
 			
-			require(positionObject.isLiquidatable(), "ImpermaxV3Collateral: INSUFFICIENT_SHORTFALL");
-			require(!positionObject.isUnderwater(), "ImpermaxV3Collateral: CANNOT_LIQUIDATE_UNDERWATER_POSITION");
+			if (blockOfLastRestructureOrLiquidation[tokenId] != block.number) {
+				require(positionObject.isLiquidatable(), "ImpermaxV3Collateral: INSUFFICIENT_SHORTFALL");
+				require(!positionObject.isUnderwater(), "ImpermaxV3Collateral: CANNOT_LIQUIDATE_UNDERWATER_POSITION");
+				blockOfLastRestructureOrLiquidation[tokenId] = block.number;
+			}
 			
 			uint collateralValue = positionObject.getCollateralValue(CollateralMath.Price.CURRENT);
 			uint repayValue = msg.sender == borrowable0
@@ -132,14 +136,19 @@ contract ImpermaxV3Collateral is ICollateral, CSetter {
 		seizeTokenId = INFTLP(underlying).split(tokenId, seizePercentage);
 
 		address reservesManager = IFactory(factory).reservesManager();		
-		if (liquidationFee > 0 && reservesManager != address(0)) {
+		if (liquidationFee > 0) {
 			uint feePercentage = repayToCollateralRatio.mul(liquidationFee).div(uint(1e18).sub(seizePercentage));	
-			uint feeTokenId = INFTLP(underlying).split(tokenId, feePercentage);		
-			_mint(reservesManager, feeTokenId);
+			uint feeTokenId = INFTLP(underlying).split(tokenId, feePercentage);
+			_mint(reservesManager, feeTokenId); // _safeMint would be unsafe
 			emit Seize(reservesManager, tokenId, feePercentage, feeTokenId);
 		}
 		
 		INFTLP(underlying).safeTransferFrom(address(this), liquidator, seizeTokenId, data);
 		emit Seize(liquidator, tokenId, seizePercentage, seizeTokenId);
+	}
+	
+	function onERC721Received(address operator, address from, uint256 tokenId, bytes calldata data) external pure returns (bytes4 returnValue) {
+		operator; from; tokenId; data;
+		return bytes4(keccak256("onERC721Received(address,address,uint256,bytes)"));
 	}
 }

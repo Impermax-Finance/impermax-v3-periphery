@@ -56,7 +56,6 @@ interface IBorrowable {
 	function borrowAllowance(address owner, address spender) external view returns (uint);
 	function borrowBalance(uint tokenId) external view returns (uint);	
 	function currentBorrowBalance(uint tokenId) external returns (uint);	
-	function borrowTracker() external view returns (address);
 	
 	function BORROW_PERMIT_TYPEHASH() external pure returns (bytes32);
 	function borrowApprove(address spender, uint256 value) external returns (bool);
@@ -64,7 +63,6 @@ interface IBorrowable {
 	function borrow(uint256 tokenId, address receiver, uint borrowAmount, bytes calldata data) external;
 	function liquidate(uint256 tokenId, uint repayAmount, address liquidator, bytes calldata data) external returns (uint seizeTokenId);
 	function restructureDebt(uint256 tokenId, uint256 reduceToRatio) external;
-	function trackBorrow(uint256 tokenId) external;
 	
 	/*** Borrowable Interest Rate Model ***/
 
@@ -90,7 +88,6 @@ interface IBorrowable {
 	event NewKinkUtilizationRate(uint newKinkUtilizationRate);
 	event NewAdjustSpeed(uint newAdjustSpeed);
 	event NewDebtCeiling(uint newDebtCeiling);
-	event NewBorrowTracker(address newBorrowTracker);
 
 	function RESERVE_FACTOR_MAX() external pure returns (uint);
 	function KINK_UR_MIN() external pure returns (uint);
@@ -107,5 +104,4 @@ interface IBorrowable {
 	function _setReserveFactor(uint newReserveFactor) external;
 	function _setKinkUtilizationRate(uint newKinkUtilizationRate) external;
 	function _setAdjustSpeed(uint newAdjustSpeed) external;
-	function _setBorrowTracker(address newBorrowTracker) external;
 }

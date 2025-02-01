@@ -9,6 +9,7 @@ interface IV3BaseRouter01 {
 		address[2] tokens;
 	}
 	function getLendingPool(address nftlp) external view returns (LendingPool memory pool);
+	function factory() external view returns (address);
 	
 	function execute(
 		address nftlp,

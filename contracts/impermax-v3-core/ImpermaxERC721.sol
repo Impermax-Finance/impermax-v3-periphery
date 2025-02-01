@@ -11,7 +11,7 @@ contract ImpermaxERC721 is IERC721 {
 	string public symbol;
 	
 	mapping(address => uint) public balanceOf;
-	mapping(uint256 => address) public ownerOf;
+	mapping(uint256 => address) internal _ownerOf;
 	mapping(uint256 => address) public getApproved;
 	mapping(address => mapping(address => bool)) public isApprovedForAll;
 	
@@ -48,7 +48,7 @@ contract ImpermaxERC721 is IERC721 {
 	}
 
 	function _update(address to, uint256 tokenId, address auth) internal returns (address from) {
-		from = ownerOf[tokenId];
+		from = _ownerOf[tokenId];
 		if (auth != address(0)) _checkAuthorized(from, auth, tokenId);
 
 		if (from != address(0)) {
@@ -60,7 +60,7 @@ contract ImpermaxERC721 is IERC721 {
 			balanceOf[to] += 1;
 		}
 
-		ownerOf[tokenId] = to;
+		_ownerOf[tokenId] = to;
 		emit Transfer(from, to, tokenId);
 	}
 	
@@ -68,6 +68,9 @@ contract ImpermaxERC721 is IERC721 {
 		require(to != address(0), "ImpermaxERC721: INVALID_RECEIVER");
 		address previousOwner = _update(to, tokenId, address(0));
 		require(previousOwner == address(0), "ImpermaxERC721: INVALID_SENDER");
+	}
+	function _safeMint(address to, uint256 tokenId) internal {
+		_safeMint(to, tokenId, "");
 	}
 	function _safeMint(address to, uint256 tokenId, bytes memory data) internal {
 		_mint(to, tokenId);
@@ -108,7 +111,7 @@ contract ImpermaxERC721 is IERC721 {
 	}
 	
 	function _requireOwned(uint256 tokenId) internal view returns (address) {
-		address owner = ownerOf[tokenId];
+		address owner = _ownerOf[tokenId];
 		require(owner != address(0), "ImpermaxERC721: NONEXISTENT_TOKEN");
 		return owner;
 	}
@@ -118,6 +121,10 @@ contract ImpermaxERC721 is IERC721 {
 			bytes4 retval = IERC721Receiver(to).onERC721Received(msg.sender, from, tokenId, data);
 			require(retval == bytes4(keccak256("onERC721Received(address,address,uint256,bytes)")), "ImpermaxERC721: INVALID_RECEIVER");
 		}
+	}
+	
+	function ownerOf(uint256 tokenId) external view returns (address) {
+		return _requireOwned(tokenId);
 	}
 	
 	function approve(address to, uint256 tokenId) external {
@@ -149,9 +156,9 @@ contract ImpermaxERC721 is IERC721 {
 				keccak256(abi.encode(typehash, spender, tokenId, nonces[tokenId]++, deadline))
 			)
 		);
-		address owner = ownerOf[tokenId];
+		address owner = _requireOwned(tokenId);
 		address recoveredAddress = ecrecover(digest, v, r, s);
-		require(recoveredAddress != address(0) && recoveredAddress == owner, "ImpermaxERC721: INVALID_SIGNATURE");	
+		require(recoveredAddress == owner, "ImpermaxERC721: INVALID_SIGNATURE");	
 	}
 
 	// keccak256("Permit(address spender,uint256 tokenId,uint256 nonce,uint256 deadline)");

@@ -7,9 +7,8 @@ import "../interfaces/INFTLP.sol";
 library CollateralMath {
 	using SafeMath for uint;
 
-    uint constant Q32 = 2**32;
+    uint constant Q64 = 2**64;
     uint constant Q96 = 2**96;
-    uint constant Q160 = 2**160;
     uint constant Q192 = 2**192;
 	
 	enum Price {LOWEST, CURRENT, HIGHEST}
@@ -62,7 +61,7 @@ library CollateralMath {
 		if (price == Price.HIGHEST) priceSqrtX96 = priceSqrtX96.mul(positionObject.safetyMarginSqrt).div(1e18);
 		uint relativePriceX = getRelativePriceX(priceSqrtX96);
 		uint relativePriceY = getRelativePriceY(priceSqrtX96);
-		return amountX.mul(relativePriceX).div(Q96).add(amountY.mul(relativePriceY).div(Q96));
+		return amountX.mul(relativePriceX).div(Q64).add(amountY.mul(relativePriceY).div(Q64));
 	}
 	
 	// realX * priceX + realY * priceY

@@ -48,7 +48,7 @@ contract ImpermaxV3UniV3Router01 is ImpermaxV3BaseRouter01 {
 		uint amount0Router,
 		uint amount1Router
 	) internal {
-		(uint24 fee, int24 tickLower, int24 tickUpper,,,) = ITokenizedUniswapV3Position(pool.nftlp).positions(tokenId);
+		(uint24 fee, int24 tickLower, int24 tickUpper,,,,,) = ITokenizedUniswapV3Position(pool.nftlp).positions(tokenId);
 		address uniswapV3Pool = ITokenizedUniswapV3Position(pool.nftlp).getPool(fee);
 		
 		// TODO this is the same as _mintUniV2Internal
@@ -91,7 +91,7 @@ contract ImpermaxV3UniV3Router01 is ImpermaxV3BaseRouter01 {
 		uint amount0Min,
 		uint amount1Min
 	) internal {
-		(uint24 fee, int24 tickLower, int24 tickUpper,,,) = ITokenizedUniswapV3Position(pool.nftlp).positions(tokenId);
+		(uint24 fee, int24 tickLower, int24 tickUpper,,,,,) = ITokenizedUniswapV3Position(pool.nftlp).positions(tokenId);
 		address uniswapV3Pool = ITokenizedUniswapV3Position(pool.nftlp).getPool(fee);
 		(uint128 liquidity, uint amount0, uint amount1) = UniswapV3Math.optimalLiquidity(uniswapV3Pool, tickLower, tickUpper, amount0Desired, amount1Desired, amount0Min, amount1Min);
 		_mintUniV3Internal(pool, tokenId, msgSender, liquidity, amount0, amount1, 0, 0);
@@ -144,7 +144,7 @@ contract ImpermaxV3UniV3Router01 is ImpermaxV3BaseRouter01 {
 	) internal returns (Actions.Action[] memory a) {
 		uint128 liquidity;
 		{
-		(uint24 fee, int24 tickLower, int24 tickUpper,,,) = ITokenizedUniswapV3Position(pool.nftlp).positions(tokenId);
+		(uint24 fee, int24 tickLower, int24 tickUpper,,,,,) = ITokenizedUniswapV3Position(pool.nftlp).positions(tokenId);
 		address uniswapV3Pool = ITokenizedUniswapV3Position(pool.nftlp).getPool(fee);
 		(liquidity, amount0, amount1) = UniswapV3Math.optimalLiquidity(uniswapV3Pool, tickLower, tickUpper, amount0, amount1, amount0Min, amount1Min);
 		}
@@ -252,7 +252,7 @@ contract ImpermaxV3UniV3Router01 is ImpermaxV3BaseRouter01 {
 		
 		// only succeeds if called by a uniswapV3Pool
 		address uniswapV3Pool = IUniswapV3Factory(uniswapV3Factory).getPool(decoded.token0, decoded.token1, decoded.fee);
-		require(msg.sender == uniswapV3Pool);
+		require(msg.sender == uniswapV3Pool, "ImpermaxRouter: UNAUTHORIZED_CALLER");
 		
 		uint amount0Router = Math.min(amount0Owed, decoded.amount0Router);
 		uint amount1Router = Math.min(amount0Owed, decoded.amount1Router);

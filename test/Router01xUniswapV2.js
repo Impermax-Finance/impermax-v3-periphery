@@ -107,6 +107,7 @@ contract('ImpermaxV3UniV2Router01', function (accounts) {
 	let borrower = accounts[1];
 	let lender = accounts[2];
 	let liquidator = accounts[3];
+	let reservesManager = accounts[4];
 	
 	let uniswapV2Factory;
 	let tokenizedUniswapV2Factory;
@@ -128,7 +129,7 @@ contract('ImpermaxV3UniV2Router01', function (accounts) {
 		tokenizedUniswapV2Factory = await TokenizedUniswapV2Factory.new(simpleUniswapOracle.address);
 		const bDeployer = await BDeployer.new();
 		const cDeployer = await CDeployer.new();
-		impermaxFactory = await Factory.new(address(0), address(0), bDeployer.address, cDeployer.address);
+		impermaxFactory = await Factory.new(address(0), address(0), reservesManager, bDeployer.address, cDeployer.address);
 		WETH = await WETH9.new();
 		UNI = await MockERC20.new('Uniswap', 'UNI');
 		const uniswapV2PairAddress = await uniswapV2Factory.createPair.call(WETH.address, UNI.address);

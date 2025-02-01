@@ -20,7 +20,6 @@ interface INFTLP {
 	function transferFrom(address from, address to, uint256 tokenId) external;
 	
 	// Global state
-	function factory() external view returns (address);
 	function token0() external view returns (address);
 	function token1() external view returns (address);
 	
@@ -33,5 +32,5 @@ interface INFTLP {
 	// Interactions
 	
 	function split(uint256 tokenId, uint256 percentage) external returns (uint256 newTokenId);
-	function join(uint256 tokenIdFrom, uint256 tokenIdTo) external;
+	function join(uint256 tokenId, uint256 tokenToJoin) external;
 }

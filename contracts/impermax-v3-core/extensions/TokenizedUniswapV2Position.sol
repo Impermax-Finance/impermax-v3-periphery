@@ -11,11 +11,9 @@ import "../libraries/Math.sol";
 
 contract TokenizedUniswapV2Position is ITokenizedUniswapV2Position, INFTLP, ImpermaxERC721 {
 
-    uint256 constant Q16 = 2**16;
     uint256 constant Q24 = 2**24;
     uint256 constant Q32 = 2**32;
     uint256 constant Q96 = 2**96;
-    uint256 constant Q160 = 2**160;
 
 	address public factory;
 	address public simpleUniswapOracle;
@@ -53,34 +51,35 @@ contract TokenizedUniswapV2Position is ITokenizedUniswapV2Position, INFTLP, Impe
 		return Math.sqrt(twapPrice112x112.mul(Q32)).mul(Q24);
 	}
 	
-	function getAdjustFactor() internal view returns (uint256) {
+	function _getAdjustFactor() internal view returns (uint256) {
 		(uint112 reserve0, uint112 reserve1,) = IUniswapV2Pair(underlying).getReserves();
 		uint256 collateralTotalSupply = IUniswapV2Pair(underlying).totalSupply();
 		uint256 kSqrt = Math.sqrt(uint256(reserve0).mul(reserve1));
 		return kSqrt.mul(1e18).div(collateralTotalSupply, "TokenizedUniswapV2Position: ZERO_COLLATERAL_TOTAL_SUPPLY");
 	}
 	
-	function getRealX(uint256 _tokenId, uint256 priceSqrtX96) internal view returns (uint256) {
-		return liquidity[_tokenId].mul(Q96).div(priceSqrtX96).mul(getAdjustFactor()).div(1e18);
+	function _getRealX(uint256 tokenId, uint256 priceSqrtX96, uint256 adjustFactor) internal view returns (uint256) {
+		return liquidity[tokenId].mul(Q96).div(priceSqrtX96).mul(adjustFactor).div(1e18);
 	}
-	function getRealY(uint256 _tokenId, uint256 priceSqrtX96) internal view returns (uint256) {
-		return liquidity[_tokenId].mul(priceSqrtX96).div(Q96).mul(getAdjustFactor()).div(1e18);
+	function _getRealY(uint256 tokenId, uint256 priceSqrtX96, uint256 adjustFactor) internal view returns (uint256) {
+		return liquidity[tokenId].mul(priceSqrtX96).div(Q96).mul(adjustFactor).div(1e18);
 	}
 	
-	function getPositionData(uint256 _tokenId, uint256 _safetyMarginSqrt) external	returns (
+	function getPositionData(uint256 tokenId, uint256 safetyMarginSqrt) external	returns (
 		uint256 priceSqrtX96,
 		INFTLP.RealXYs memory realXYs
 	) {
 		priceSqrtX96 = oraclePriceSqrtX96();
+		uint256 adjustFactor = _getAdjustFactor();
 		uint256 currentPrice = priceSqrtX96;
-		uint256 lowestPrice = priceSqrtX96.mul(1e18).div(_safetyMarginSqrt);
-		uint256 highestPrice = priceSqrtX96.mul(_safetyMarginSqrt).div(1e18);
-		realXYs.lowestPrice.realX = getRealX(_tokenId, lowestPrice);
-		realXYs.lowestPrice.realY = getRealY(_tokenId, lowestPrice);
-		realXYs.currentPrice.realX = getRealX(_tokenId, currentPrice);
-		realXYs.currentPrice.realY = getRealY(_tokenId, currentPrice);
-		realXYs.highestPrice.realX = getRealX(_tokenId, highestPrice);
-		realXYs.highestPrice.realY = getRealY(_tokenId, highestPrice);
+		uint256 lowestPrice = priceSqrtX96.mul(1e18).div(safetyMarginSqrt);
+		uint256 highestPrice = priceSqrtX96.mul(safetyMarginSqrt).div(1e18);
+		realXYs.lowestPrice.realX = _getRealX(tokenId, lowestPrice, adjustFactor);
+		realXYs.lowestPrice.realY = _getRealY(tokenId, lowestPrice, adjustFactor);
+		realXYs.currentPrice.realX = _getRealX(tokenId, currentPrice, adjustFactor);
+		realXYs.currentPrice.realY = _getRealY(tokenId, currentPrice, adjustFactor);
+		realXYs.highestPrice.realX = _getRealX(tokenId, highestPrice, adjustFactor);
+		realXYs.highestPrice.realY = _getRealY(tokenId, highestPrice, adjustFactor);
 	}
  
 	/*** Interactions ***/
@@ -99,7 +98,7 @@ contract TokenizedUniswapV2Position is ITokenizedUniswapV2Position, INFTLP, Impe
 
 	// this low-level function should be called from another contract
 	function redeem(address to, uint256 tokenId) external nonReentrant update returns (uint256 redeemAmount) {
-		_checkAuthorized(ownerOf[tokenId], msg.sender, tokenId);
+		_checkAuthorized(_requireOwned(tokenId), msg.sender, tokenId);
 		
 		redeemAmount = liquidity[tokenId];
 		liquidity[tokenId] = 0;
@@ -110,8 +109,8 @@ contract TokenizedUniswapV2Position is ITokenizedUniswapV2Position, INFTLP, Impe
 	}
 	
 	function split(uint256 tokenId, uint256 percentage) external nonReentrant returns (uint256 newTokenId) {
-		require(percentage < 1e18, "TokenizedUniswapV2Position: ABOVE_100_PERCENT");
-		address owner = ownerOf[tokenId];
+		require(percentage <= 1e18, "TokenizedUniswapV2Position: ABOVE_100_PERCENT");
+		address owner = _requireOwned(tokenId);
 		_checkAuthorized(owner, msg.sender, tokenId);
 		_approve(address(0), tokenId, address(0)); // reset approval
 		
@@ -128,7 +127,9 @@ contract TokenizedUniswapV2Position is ITokenizedUniswapV2Position, INFTLP, Impe
 	}
 	
 	function join(uint256 tokenId, uint256 tokenToJoin) external nonReentrant {
-		_checkAuthorized(ownerOf[tokenToJoin], msg.sender, tokenToJoin);
+		_checkAuthorized(_requireOwned(tokenToJoin), msg.sender, tokenToJoin);
+		_requireOwned(tokenId);
+		require(tokenId != tokenToJoin, "TokenizedUniswapV3Position: SAME_ID");
 		
 		uint256 initialLiquidity = liquidity[tokenId];
 		uint256 liquidityToAdd = liquidity[tokenToJoin];

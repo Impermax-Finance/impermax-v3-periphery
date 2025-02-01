@@ -7,10 +7,22 @@ interface ITokenizedUniswapV2Position {
 	
 	// ERC-721
 	
-	function ownerOf(uint256 _tokenId) external view returns (address);
+	function name() external view returns (string memory);
+	function symbol() external view returns (string memory);
+	function balanceOf(address owner) external view returns (uint256 balance);
+	function ownerOf(uint256 tokenId) external view returns (address owner);
+	function getApproved(uint256 tokenId) external view returns (address operator);
+	function isApprovedForAll(address owner, address operator) external view returns (bool);
+	
+	function DOMAIN_SEPARATOR() external view returns (bytes32);
+	function nonces(uint256 tokenId) external view returns (uint256);
+	
 	function safeTransferFrom(address from, address to, uint256 tokenId, bytes calldata data) external;
 	function safeTransferFrom(address from, address to, uint256 tokenId) external;
 	function transferFrom(address from, address to, uint256 tokenId) external;
+	function approve(address to, uint256 tokenId) external;
+	function setApprovalForAll(address operator, bool approved) external;
+	function permit(address spender, uint tokenId, uint deadline, uint8 v, bytes32 r, bytes32 s) external;
 	
 	// INFTLP
 	
@@ -21,7 +33,7 @@ interface ITokenizedUniswapV2Position {
 		INFTLP.RealXYs memory realXYs
 	);
 	
-	function join(uint256 tokenIdFrom, uint256 tokenIdTo) external;
+	function join(uint256 tokenId, uint256 tokenToJoin) external;
 	function split(uint256 tokenId, uint256 percentage) external returns (uint256 newTokenId);
 	
 	// ITokenizedUniswapV2Position

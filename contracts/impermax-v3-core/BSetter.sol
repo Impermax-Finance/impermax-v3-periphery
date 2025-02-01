@@ -16,7 +16,6 @@ contract BSetter is PoolToken, BStorage {
 	event NewKinkUtilizationRate(uint newKinkUtilizationRate);
 	event NewAdjustSpeed(uint newAdjustSpeed);
 	event NewDebtCeiling(uint newDebtCeiling);
-	event NewBorrowTracker(address newBorrowTracker);
 	
 	// called once by the factory at time of deployment
 	function _initialize (
@@ -53,11 +52,6 @@ contract BSetter is PoolToken, BStorage {
 	function _setDebtCeiling(uint newDebtCeiling) external nonReentrant onlyAdmin {
 		debtCeiling = newDebtCeiling;
 		emit NewDebtCeiling(newDebtCeiling);
-	}
-
-	function _setBorrowTracker(address newBorrowTracker) external nonReentrant onlyAdmin {
-		borrowTracker = newBorrowTracker;
-		emit NewBorrowTracker(newBorrowTracker);
 	}
 	
 	function _checkSetting(uint parameter, uint min, uint max) internal view {

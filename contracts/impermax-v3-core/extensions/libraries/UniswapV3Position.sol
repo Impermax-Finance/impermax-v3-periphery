@@ -1,10 +1,6 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity >=0.5.0 <0.8.0;
 
-import './FullMath.sol';
-import './FixedPoint128.sol';
-import './LiquidityMath.sol';
-
 /// @title Position
 /// @notice Positions represent an owner address' liquidity between a lower and upper tick boundary
 /// @dev Positions store additional state for tracking fees owed to the position

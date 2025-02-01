@@ -12,6 +12,9 @@ interface IERC721 {
 	function getApproved(uint256 tokenId) external view returns (address operator);
 	function isApprovedForAll(address owner, address operator) external view returns (bool);
 	
+	function DOMAIN_SEPARATOR() external view returns (bytes32);
+	function nonces(uint256 tokenId) external view returns (uint256);
+	
 	function safeTransferFrom(address from, address to, uint256 tokenId, bytes calldata data) external;
 	function safeTransferFrom(address from, address to, uint256 tokenId) external;
 	function transferFrom(address from, address to, uint256 tokenId) external;
