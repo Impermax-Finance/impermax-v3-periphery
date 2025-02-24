@@ -7,7 +7,6 @@ import "./libraries/SafeMath.sol";
 import "./libraries/TransferHelper.sol";
 import "./libraries/ImpermaxPermit.sol";
 import "./impermax-v3-core/interfaces/IPoolToken.sol";
-import "./impermax-v3-core/interfaces/IBorrowable.sol";
 
 contract PoolTokenRouter01 {
 	using SafeMath for uint;

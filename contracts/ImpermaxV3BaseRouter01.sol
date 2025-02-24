@@ -5,13 +5,11 @@ import "./interfaces/IERC20.sol";
 import "./interfaces/IERC721.sol";
 import "./interfaces/IWETH.sol";
 import "./interfaces/IV3BaseRouter01.sol";
-import "./interfaces/IAllowanceTransfer.sol";
 import "./libraries/Math.sol";
 import "./libraries/SafeMath.sol";
 import "./libraries/TransferHelper.sol";
 import "./libraries/ImpermaxPermit.sol";
 import "./libraries/Actions.sol";
-import "./impermax-v3-core/interfaces/IPoolToken.sol";
 import "./impermax-v3-core/interfaces/IBorrowable.sol";
 import "./impermax-v3-core/interfaces/IFactory.sol";
 import "./impermax-v3-core/interfaces/IImpermaxCallee.sol";
@@ -65,7 +63,7 @@ contract ImpermaxV3BaseRouter01 is IV3BaseRouter01, IImpermaxCallee {
 		address to,
 		Actions.Action memory nextAction
 	) internal {
-		bytes memory encoded = nextAction.actionType == Actions.Type.NO_ACTION 
+		bytes memory encoded = nextAction.actionType == Actions.Type.NO_ACTION || to != address(this)
 			? bytes("")
 			: abi.encode(BorrowCallbackData({
 				pool: pool,
@@ -152,7 +150,7 @@ contract ImpermaxV3BaseRouter01 is IV3BaseRouter01, IImpermaxCallee {
 				decoded.to,
 				nextAction
 			);
-			return tokenId;
+			if (decoded.to == address(this)) return tokenId;
 		}
 		else if (action.actionType == Actions.Type.REPAY_USER) {
 			Actions.RepayUserData memory decoded = abi.decode(action.actionData, (Actions.RepayUserData));
