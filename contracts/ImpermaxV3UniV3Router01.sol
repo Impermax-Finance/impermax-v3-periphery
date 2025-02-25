@@ -153,10 +153,17 @@ contract ImpermaxV3UniV3Router01 is ImpermaxV3BaseRouter01 {
 			amount1 > amount1User ? amount1 - amount1User : 0
 		);
 
-		a = new Actions.Action[](3);		
-		a[0] = Actions.getBorrowAction(0, amount0Router, address(this));
-		a[1] = Actions.getBorrowAction(1, amount1Router, address(this));
-		a[2] = Actions.getMintUniV3InternalAction(liquidity, amount0 - amount0Router, amount1 - amount1Router, amount0Router, amount1Router);
+		require(amount0Router > 0 || amount1Router > 0, "ImpermaxRouter: NO_ACTUAL_BORROWING");
+		if (amount0Router > 0 && amount1Router > 0) {
+			a = new Actions.Action[](3);		
+			a[0] = Actions.getBorrowAction(0, amount0Router, address(this));
+			a[1] = Actions.getBorrowAction(1, amount1Router, address(this));
+		} else {
+			a = new Actions.Action[](2);
+			if (amount0Router > 0)	a[0] = Actions.getBorrowAction(0, amount0Router, address(this));
+			if (amount1Router > 0)	a[0] = Actions.getBorrowAction(1, amount1Router, address(this));
+		}
+		a[a.length-1] = Actions.getMintUniV3InternalAction(liquidity, amount0 - amount0Router, amount1 - amount1Router, amount0Router, amount1Router);
 	}
 
 	/*** EXECUTE ***/
