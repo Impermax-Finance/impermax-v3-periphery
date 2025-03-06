@@ -4,6 +4,7 @@ pragma experimental ABIEncoderV2;
 import "../interfaces/IERC721.sol";
 import "../interfaces/IERC20.sol";
 import "../interfaces/IAllowanceTransfer.sol";
+import "../impermax-v3-core/interfaces/IBorrowable.sol";
 import "../impermax-v3-core/interfaces/IPoolToken.sol";
 import "./TransferHelper.sol";
 
@@ -15,7 +16,8 @@ library ImpermaxPermit {
 		PERMIT1,
 		PERMIT_NFT,
 		PERMIT2_SINGLE,
-		PERMIT2_BATCH
+		PERMIT2_BATCH,
+		PERMIT_BORROW
 	}
 	struct Permit {
 		PermitType permitType;
@@ -68,6 +70,16 @@ library ImpermaxPermit {
 		(bytes32 r, bytes32 s, uint8 v) = decodeSignature(signature);
 		IERC721(erc721).permit(address(this), tokenId, deadline, v, r, s);
 	}
+		
+	function permitBorrow(
+		address borrowable,
+		uint amount, 
+		uint deadline,
+		bytes memory signature
+	) private {	
+		(bytes32 r, bytes32 s, uint8 v) = decodeSignature(signature);
+		IBorrowable(borrowable).borrowPermit(msg.sender, address(this), amount, deadline, v, r, s);
+	}
 	
 	function executePermit(Permit memory permit) public {
 		if (permit.permitType == PermitType.PERMIT1) {
@@ -95,6 +107,15 @@ library ImpermaxPermit {
 		else if (permit.permitType == PermitType.PERMIT2_BATCH) {
 			IAllowanceTransfer.PermitBatch memory decoded = abi.decode(permit.permitData, (IAllowanceTransfer.PermitBatch));
 			IAllowanceTransfer(PERMIT2_ADDRESS).permit(msg.sender, decoded, permit.signature);
+		}
+		else if (permit.permitType == PermitType.PERMIT_BORROW) {
+			Permit1Data memory decoded = abi.decode(permit.permitData, (Permit1Data));
+			permitBorrow(
+				decoded.token,
+				decoded.amount,
+				decoded.deadline,
+				permit.signature
+			);
 		}
 		else revert("ImpermaxRouter: INVALID_PERMIT");
 	}
