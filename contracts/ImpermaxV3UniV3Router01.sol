@@ -51,7 +51,6 @@ contract ImpermaxV3UniV3Router01 is ImpermaxV3BaseRouter01 {
 		(uint24 fee, int24 tickLower, int24 tickUpper,,,,,) = ITokenizedUniswapV3Position(pool.nftlp).positions(tokenId);
 		address uniswapV3Pool = ITokenizedUniswapV3Position(pool.nftlp).getPool(fee);
 		
-		// TODO this is the same as _mintUniV2Internal
 		// adjust amount for ETH
 		// if the user has deposited native ETH, we need to subtract that amount from amountUser and add it to amountRouter
 		int isEth = pool.tokens[0] == WETH ? 0 : pool.tokens[1] == WETH ? int(1) : -1;
@@ -262,7 +261,7 @@ contract ImpermaxV3UniV3Router01 is ImpermaxV3BaseRouter01 {
 		require(msg.sender == uniswapV3Pool, "ImpermaxRouter: UNAUTHORIZED_CALLER");
 		
 		uint amount0Router = Math.min(amount0Owed, decoded.amount0Router);
-		uint amount1Router = Math.min(amount0Owed, decoded.amount1Router);
+		uint amount1Router = Math.min(amount1Owed, decoded.amount1Router);
 		uint amount0User = amount0Router < amount0Owed ? amount0Owed - amount0Router : 0;
 		uint amount1User = amount1Router < amount1Owed ? amount1Owed - amount1Router : 0;
 		

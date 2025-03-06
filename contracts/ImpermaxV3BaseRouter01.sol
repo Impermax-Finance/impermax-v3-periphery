@@ -238,9 +238,6 @@ contract ImpermaxV3BaseRouter01 is IV3BaseRouter01, IImpermaxCallee {
 	
 	/*** Callbacks ***/
 	
-	// WARNING FOR TESTING
-	// IF SOMEONE IS ABLE TO REENTER IN ONE OF THIS FUNCTION THROUGH AN EXTERNAL CONTRACT HE WILL BE ABLE TO STEAL APPROVED FUNDS
-	
 	function impermaxV3Borrow(address sender, uint256 tokenId, uint borrowAmount, bytes calldata data) external {
 		borrowAmount;
 		BorrowCallbackData memory decoded = abi.decode(data, (BorrowCallbackData));

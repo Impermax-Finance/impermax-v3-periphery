@@ -24,7 +24,6 @@ contract ActionsGetter {
 	
 	function getWithdrawTokenAction(address token, address to) external pure returns (Actions.Action memory) {
 		return Actions.getWithdrawTokenAction(token, to);
-		
 	}
 	
 	function getWithdrawEthAction(address to) external pure returns (Actions.Action memory) {
