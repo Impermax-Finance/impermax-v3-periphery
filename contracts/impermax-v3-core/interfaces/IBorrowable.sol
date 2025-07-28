@@ -67,7 +67,7 @@ interface IBorrowable {
 	/*** Borrowable Interest Rate Model ***/
 
 	event AccrueInterest(uint interestAccumulated, uint borrowIndex, uint totalBorrows);
-	event CalculateKink(uint kinkRate);
+	event CalculateKinkBorrowRate(uint kinkBorrowRate);
 	event CalculateBorrowRate(uint borrowRate);
 	
 	function KINK_BORROW_RATE_MAX() external pure returns (uint);

@@ -89,6 +89,7 @@ contract ImpermaxV3Collateral is ICollateral, CSetter {
 		address _borrowable1 = borrowable1;
 		require(borrowable == _borrowable0 || borrowable == _borrowable1, "ImpermaxV3Collateral: INVALID_BORROWABLE");
 		require(INFTLP(underlying).ownerOf(tokenId) == address(this), "ImpermaxV3Collateral: INVALID_NFTLP_ID");
+		_requireOwned(tokenId);
 		
 		uint debtX = borrowable == _borrowable0 ? accountBorrows : uint(-1);
 		uint debtY = borrowable == _borrowable1 ? accountBorrows : uint(-1);

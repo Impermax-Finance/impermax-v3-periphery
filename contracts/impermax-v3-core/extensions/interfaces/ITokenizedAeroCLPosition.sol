@@ -3,7 +3,7 @@ pragma experimental ABIEncoderV2;
 
 import "../../interfaces/INFTLP.sol";
 
-interface ITokenizedUniswapV3Position {
+interface ITokenizedAeroCLPosition {
 	
 	// ERC-721
 	
@@ -33,57 +33,40 @@ interface ITokenizedUniswapV3Position {
 		INFTLP.RealXYs memory realXYs
 	);
 	
-	function join(uint256 tokenId, uint256 tokenToJoin) external;
 	function split(uint256 tokenId, uint256 percentage) external returns (uint256 newTokenId);
 	
-	// ITokenizedUniswapV3Position
-	
-	struct Position {
-		uint24 fee;
-		int24 tickLower;
-		int24 tickUpper;
-		uint128 liquidity;
-		uint256 feeGrowthInside0LastX128;
-		uint256 feeGrowthInside1LastX128;
-		uint256 unclaimedFees0;
-		uint256 unclaimedFees1;
-	}
+	// ITokenizedAeroCLPosition
 	
 	function factory() external view returns (address);
-	function uniswapV3Factory() external view returns (address);
+	function clFactory() external view returns (address);
+	function nfpManager() external view returns (address);
 	function oracle() external view returns (address);
+	function rewardsToken() external view returns (address);
 	
-	function totalBalance(uint24 fee, int24 tickLower, int24 tickUpper) external view returns (uint256);
-	
-	function positions(uint256 tokenId) external view returns (
-		uint24 fee,
-		int24 tickLower,
-		int24 tickUpper,
-		uint128 liquidity,
-		uint256 feeGrowthInside0LastX128,
-		uint256 feeGrowthInside1LastX128,
-		uint256 unclaimedFees0,
-		uint256 unclaimedFees1
-	);
-	function positionsLength() external view returns (uint256);
-	
-	function getPool(uint24 fee) external view returns (address pool);
+	function getPool(int24 tickSpacing) external view returns (address pool);
+	function getGauge(uint256 tokenId) external view returns (address gauge);
 	
 	function oraclePriceSqrtX96() external returns (uint256);
 	
-	event MintPosition(uint256 indexed tokenId, uint24 fee, int24 tickLower, int24 tickUpper);
+	event MintPosition(uint256 indexed tokenId, int24 tickSpacing, int24 tickLower, int24 tickUpper);
 	event UpdatePositionLiquidity(uint256 indexed tokenId, uint256 liquidity);
-	event UpdatePositionFeeGrowthInside(uint256 indexed tokenId, uint256 feeGrowthInside0LastX128, uint256 feeGrowthInside1LastX128);
-	event UpdatePositionUnclaimedFees(uint256 indexed tokenId, uint256 unclaimedFees0, uint256 unclaimedFees1);
+	event SplitPosition(uint256 indexed tokenId, uint256 newTokenId);
+	event SyncReward(uint256 totalRewardBalance);
+	event UpdatePositionReward(uint256 indexed tokenId, uint256 rewardOwed, uint256 claimAmount);
+	event GaugeAdded(int24 tickSpacing, address gauge);
 
 	function _initialize (
-		address _uniswapV3Factory, 
+		address _clFactory, 
+		address _nfpManager, 
 		address _oracle, 
 		address _token0, 
-		address _token1
+		address _token1,
+		address _rewardsToken
 	) external;
 	
-	function mint(address to, uint24 fee, int24 tickLower, int24 tickUpper) external returns (uint256 newTokenId);
-	function redeem(address to, uint256 tokenId) external returns (uint256 amount0, uint256 amount1);
-	function claim(address to, uint256 tokenId) external returns (uint256 feeCollected0, uint256 feeCollected1);
+	function mint(address to, uint256 tokenId, bytes calldata data) external;
+	function redeem(address to, uint256 tokenId) external;	
+	function increaseLiquidity(uint256 tokenId) external returns (uint128 liquidity, uint256 amount0, uint256 amount1);
+	function claim(uint256 tokenId, address to) external returns (uint256 claimAmount);
+	function skim(address to) external returns (uint256 balance0, uint256 balance1);
 }

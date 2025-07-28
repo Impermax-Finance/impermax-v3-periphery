@@ -5,24 +5,19 @@ import "./interfaces/ITokenizedUniswapV3Deployer.sol";
 import "./interfaces/ITokenizedUniswapV3Position.sol";
 
 contract TokenizedUniswapV3Factory is ITokenizedUniswapV3Factory {
-	address public admin;
-	address public pendingAdmin;
 	
 	address public uniswapV3Factory;
 	address public oracle;
-	address public acModule;
 	
 	ITokenizedUniswapV3Deployer public deployer;
 
 	mapping(address => mapping(address => address)) public getNFTLP;
 	address[] public allNFTLP;
 
-	constructor(address _admin, address _uniswapV3Factory, ITokenizedUniswapV3Deployer _deployer, address _oracle) public {
-		admin = _admin;
+	constructor(address _uniswapV3Factory, ITokenizedUniswapV3Deployer _deployer, address _oracle) public {
 		uniswapV3Factory = _uniswapV3Factory;
 		deployer = _deployer;
 		oracle = _oracle;
-		emit NewAdmin(address(0), _admin);
 	}
 
 	function allNFTLPLength() external view returns (uint) {
@@ -40,31 +35,5 @@ contract TokenizedUniswapV3Factory is ITokenizedUniswapV3Factory {
 		getNFTLP[token1][token0] = NFTLP;
 		allNFTLP.push(NFTLP);
 		emit NFTLPCreated(token0, token1, NFTLP, allNFTLP.length);
-	}
-	
-	/***  acModule ***/
-	
-	function _setPendingAdmin(address newPendingAdmin) external {
-		require(msg.sender == admin, "TokenizedUniswapV3Factory: UNAUTHORIZED");
-		address oldPendingAdmin = pendingAdmin;
-		pendingAdmin = newPendingAdmin;
-		emit NewPendingAdmin(oldPendingAdmin, newPendingAdmin);
-	}
-
-	function _acceptAdmin() external {
-		require(msg.sender == pendingAdmin, "TokenizedUniswapV3Factory: UNAUTHORIZED");
-		address oldAdmin = admin;
-		address oldPendingAdmin = pendingAdmin;
-		admin = pendingAdmin;
-		pendingAdmin = address(0);
-		emit NewAdmin(oldAdmin, admin);
-		emit NewPendingAdmin(oldPendingAdmin, address(0));
-	}
-	
-	function _setAcModule(address newAcModule) external {
-		require(msg.sender == admin, "TokenizedUniswapV3Factory: UNAUTHORIZED");
-		address oldAcModule = acModule;
-		acModule = newAcModule;
-		emit NewAcModule(oldAcModule, newAcModule);
 	}
 }

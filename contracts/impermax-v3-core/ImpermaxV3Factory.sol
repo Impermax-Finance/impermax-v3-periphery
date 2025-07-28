@@ -54,6 +54,7 @@ contract ImpermaxV3Factory is IFactory {
 	}
 	
 	function createCollateral(address nftlp) external returns (address collateral) {
+		_getTokens(nftlp);
 		require(getLendingPool[nftlp].collateral == address(0), "Impermax: ALREADY_EXISTS");		
 		collateral = cDeployer.deployCollateral(nftlp);
 		ICollateral(collateral)._setFactory();
@@ -62,6 +63,7 @@ contract ImpermaxV3Factory is IFactory {
 	}
 	
 	function createBorrowable0(address nftlp) external returns (address borrowable0) {
+		_getTokens(nftlp);
 		require(getLendingPool[nftlp].borrowable0 == address(0), "Impermax: ALREADY_EXISTS");		
 		borrowable0 = bDeployer.deployBorrowable(nftlp, 0);
 		IBorrowable(borrowable0)._setFactory();
@@ -70,6 +72,7 @@ contract ImpermaxV3Factory is IFactory {
 	}
 	
 	function createBorrowable1(address nftlp) external returns (address borrowable1) {
+		_getTokens(nftlp);
 		require(getLendingPool[nftlp].borrowable1 == address(0), "Impermax: ALREADY_EXISTS");		
 		borrowable1 = bDeployer.deployBorrowable(nftlp, 1);
 		IBorrowable(borrowable1)._setFactory();

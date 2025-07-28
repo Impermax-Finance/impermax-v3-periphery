@@ -17,9 +17,7 @@ interface IUniswapV3Pool {
             int24 tick,
             uint16 observationIndex,
             uint16 observationCardinality,
-            uint16 observationCardinalityNext,
-            uint8 feeProtocol,
-            bool unlocked
+            uint16 observationCardinalityNext
         );
 
     function feeGrowthGlobal0X128() external view returns (uint256);

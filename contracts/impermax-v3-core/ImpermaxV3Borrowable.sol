@@ -98,8 +98,10 @@ contract ImpermaxV3Borrowable is IBorrowable, PoolToken, BStorage, BSetter, BInt
 		uint _totalBalance = totalBalance;
 		require(borrowAmount <= _totalBalance, "ImpermaxV3Borrowable: INSUFFICIENT_CASH");
 		
-		address borrower = IERC721(collateral).ownerOf(tokenId);
-		_checkBorrowAllowance(borrower, msg.sender, borrowAmount);
+		if (borrowAmount > 0) {
+			address borrower = IERC721(collateral).ownerOf(tokenId);
+			_checkBorrowAllowance(borrower, msg.sender, borrowAmount);
+		}
 		
 		// optimistically transfer funds
 		if (borrowAmount > 0) _safeTransfer(receiver, borrowAmount);

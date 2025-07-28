@@ -37,19 +37,19 @@ contract CSetter is ImpermaxERC721, CStorage {
 	}
 
 	function _setSafetyMarginSqrt(uint newSafetyMarginSqrt) external nonReentrant {
-		_checkSetting(newSafetyMarginSqrt, SAFETY_MARGIN_SQRT_MIN, SAFETY_MARGIN_SQRT_MAX);
+		_checkSetting(newSafetyMarginSqrt, SAFETY_MARGIN_SQRT_MIN, safetyMarginSqrt);
 		safetyMarginSqrt = newSafetyMarginSqrt;
 		emit NewSafetyMargin(newSafetyMarginSqrt);
 	}
 
 	function _setLiquidationIncentive(uint newLiquidationIncentive) external nonReentrant {
-		_checkSetting(newLiquidationIncentive, LIQUIDATION_INCENTIVE_MIN, LIQUIDATION_INCENTIVE_MAX);
+		_checkSetting(newLiquidationIncentive, LIQUIDATION_INCENTIVE_MIN, liquidationIncentive);
 		liquidationIncentive = newLiquidationIncentive;
 		emit NewLiquidationIncentive(newLiquidationIncentive);
 	}
 
 	function _setLiquidationFee(uint newLiquidationFee) external nonReentrant {
-		_checkSetting(newLiquidationFee, 0, LIQUIDATION_FEE_MAX);
+		_checkSetting(newLiquidationFee, 0, liquidationFee);
 		liquidationFee = newLiquidationFee;
 		emit NewLiquidationFee(newLiquidationFee);
 	}
