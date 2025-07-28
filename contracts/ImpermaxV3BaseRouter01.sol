@@ -198,6 +198,7 @@ contract ImpermaxV3BaseRouter01 is IV3BaseRouter01, IImpermaxCallee {
 	/*** External ***/
 	
 	function _checkFirstAction(Actions.Type actionType) internal; 
+	function _reset() internal {}
 	
 	function execute(
 		address nftlp,
@@ -234,6 +235,8 @@ contract ImpermaxV3BaseRouter01 is IV3BaseRouter01, IImpermaxCallee {
 		if (withCollateralTransfer) {
 			IERC721(pool.collateral).transferFrom(address(this), msg.sender, tokenId);
 		}
+		
+		_reset();
 	}
 	
 	/*** Callbacks ***/

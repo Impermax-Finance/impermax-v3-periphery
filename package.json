@@ -1,7 +1,7 @@
 {
-  "name": "impermax-v3-core",
+  "name": "impermax-v3-periphery",
   "version": "0.0.1",
-  "description": "Impermax V3 Core",
+  "description": "Impermax V3 Periphery",
   "main": "index.js",
   "author": "Simone Rigolon",
   "devDependencies": {
@@ -10,6 +10,8 @@
     "chai": "4.2.0",
     "chai-as-promised": "7.1.1",
     "chai-bignumber": "3.0.0",
+    "prettier": "^3.4.1",
+    "prettier-plugin-solidity": "^1.4.1",
     "solparse": "^2.2.8"
   },
   "dependencies": {

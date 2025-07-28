@@ -48,6 +48,10 @@ contract ActionsGetter {
 		return Actions.getMintUniV3EmptyAction(fee, tickLower, tickUpper);
 	}
 	
+	function getMintAeroEmptyAction(int24 tickSpacing, int24 tickLower, int24 tickUpper) external pure returns (Actions.Action memory) {
+		return Actions.getMintAeroEmptyAction(tickSpacing, tickLower, tickUpper);
+	}
+	
 	function getBorrowAndMintUniV2Action(
 		uint lpAmountUser,
 		uint amount0User,

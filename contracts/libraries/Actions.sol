@@ -19,7 +19,8 @@ library Actions {
 		MINT_UNIV3_INTERNAL, 
 		MINT_UNIV3, 
 		REDEEM_UNIV3,
-		BORROW_AND_MINT_UNIV3
+		BORROW_AND_MINT_UNIV3,
+		MINT_AERO_EMPTY
 	}
 	struct Action {
 		Type actionType;
@@ -108,6 +109,11 @@ library Actions {
 		uint amount1Desired;
 		uint amount0Min;
 		uint amount1Min;
+	}
+	struct MintAeroEmptyData {
+		int24 tickSpacing;
+		int24 tickLower;
+		int24 tickUpper;
 	}
 	
 	/*** Actions sorter: sorts actions and composite actions ***/
@@ -275,6 +281,14 @@ library Actions {
 			amount1Desired: amount1Desired,
 			amount0Min: amount0Min,
 			amount1Min: amount1Min
+		})));
+	}
+	
+	function getMintAeroEmptyAction(int24 tickSpacing, int24 tickLower, int24 tickUpper) external pure returns (Action memory) {
+		return _getAction(Type.MINT_AERO_EMPTY, abi.encode(MintAeroEmptyData({
+			tickSpacing: tickSpacing,
+			tickLower: tickLower,
+			tickUpper: tickUpper
 		})));
 	}
 }

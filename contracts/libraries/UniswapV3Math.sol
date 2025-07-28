@@ -15,7 +15,7 @@ library UniswapV3Math {
 		uint amount0Min,
 		uint amount1Min
 	) external view returns (uint128 liquidity, uint amount0, uint amount1) {		
-		(uint160 sqrtPriceX96, , , , , , ) = IUniswapV3Pool(uniswapV3Pool).slot0();
+		(uint160 sqrtPriceX96, , , , ) = IUniswapV3Pool(uniswapV3Pool).slot0();
 		uint160 sqrtRatioAX96 = TickMath.getSqrtRatioAtTick(tickLower);
 		uint160 sqrtRatioBX96 = TickMath.getSqrtRatioAtTick(tickUpper);
 
