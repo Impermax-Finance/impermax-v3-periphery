@@ -89,8 +89,7 @@ library NfpmAeroInteractions {
 	
 	function decreaseAndMint(address nfpManager, uint256 tokenId, uint256 percentage) external returns (uint256 newTokenId, uint128 oldTokenLiquidity, uint128 newTokenLiquidity) {
 		(,,address token0,address token1,int24 tickSpacing,int24 tickLower,int24 tickUpper,) = INonfungiblePositionManagerAero(nfpManager).positions(tokenId);
-		uint256 amount0; uint256 amount1;
-		(amount0, amount1,, oldTokenLiquidity) = decrease(nfpManager, tokenId, percentage, address(this), 0, 0);
+		(,,, oldTokenLiquidity) = decrease(nfpManager, tokenId, percentage, address(this), 0, 0);
 		(newTokenId, newTokenLiquidity) = mint(nfpManager, token0, token1, tickSpacing, tickLower, tickUpper, address(this));
 	}
 

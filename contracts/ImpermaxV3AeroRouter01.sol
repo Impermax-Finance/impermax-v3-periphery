@@ -146,6 +146,7 @@ contract ImpermaxV3AeroRouter01 is ImpermaxV3BaseRouter01, INftlpCallee {
 			nextAction: nextAction
 		}));
 		ICollateral(pool.collateral).redeem(address(this), tokenId, percentage, decoded);
+		ITokenizedAeroCLPosition(pool.nftlp).skim(msgSender);
 	}
 	function _redeemStep2(
 		LendingPool memory pool,

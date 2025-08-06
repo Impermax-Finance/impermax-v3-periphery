@@ -328,9 +328,7 @@ async function mintCollateralETHAero(router, nftlp, borrower, tokenId, tickSpaci
 		await routerManager.actionsGetter.getWithdrawEthAction(borrower)
 	];
 	if (tokenId*1==MAX_UINT_256*1) actions.unshift(await routerManager.actionsGetter.getMintAeroEmptyAction(tickSpacing, tickLower, tickUpper));
-	
-	console.log(encodeActions(actions));
-	
+		
 	return execute(router, nftlp, borrower, tokenId, actions, permits, false, amountETH);
 }
 

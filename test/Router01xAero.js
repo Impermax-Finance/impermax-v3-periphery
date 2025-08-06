@@ -160,9 +160,9 @@ contract('ImpermaxV3AeroRouter01', function (accounts) {
 		const routerLend = routerManager.poolToken;
 		
 
-		const ETH_LP_AMOUNT = bnMantissa(0.0004);
+		const ETH_LP_AMOUNT = bnMantissa(4);
 		const ETH_BORROW_AMOUNT = bnMantissa(6);
-		const USDC_LP_AMOUNT = 0.1 * 1e6;
+		const USDC_LP_AMOUNT = 26000 * 1e6;
 		const USDC_BORROW_AMOUNT = 10000 * 1e6;
 		
 		await routerLend.mintETH(borrowable0.address, root, {from: root, value: ETH_BORROW_AMOUNT});
@@ -173,7 +173,7 @@ contract('ImpermaxV3AeroRouter01', function (accounts) {
 		console.log("eth balance", await web3.eth.getBalance(root) / 1e18);
 		console.log("usdc balance", await USDC.balanceOf(root) / 1e6);
 		console.log("aero balance", await AERO.balanceOf(root) / 1e18);
-		
+				
 		/* TEST 1 */
 		await USDC.approve(router.address, USDC_LP_AMOUNT, {from: root});
 		const receipt = await mintCollateralETHAero(router, nftlp, root, MAX_UINT_256, TICK_SPACING, new BN(priceA), new BN(priceB), ETH_LP_AMOUNT, USDC_LP_AMOUNT, bnMantissa(0), bnMantissa(0), ETH_IS_0, ETH_IS_0);
@@ -189,7 +189,7 @@ contract('ImpermaxV3AeroRouter01', function (accounts) {
 		console.log("usdc balance", await USDC.balanceOf(root) / 1e6);
 		
 		await increaseTime(3700); 
-		await nftlp.claim(tokenId, root);
+		await nftlp.claim(root, tokenId);
 		console.log("aero balance", await AERO.balanceOf(root) / 1e18);
 		
 		await collateral.approve(router.address, tokenId, {from: root});
@@ -203,7 +203,7 @@ contract('ImpermaxV3AeroRouter01', function (accounts) {
 		await redeemCollateralETHAero(router, nftlp, root, tokenId, bnMantissa(1), bnMantissa(0), bnMantissa(0), ETH_IS_0, ETH_IS_0);
 		
 		
-		/* TEST 2
+		/* TEST 2 
 		await USDC.approve(router.address, USDC_LP_AMOUNT, {from: root});
 		const receipt = await mintAndLeverageETHAero(router, nftlp, root, MAX_UINT_256, TICK_SPACING, new BN(priceA), new BN(priceB), ETH_LP_AMOUNT, USDC_LP_AMOUNT, ETH_LP_AMOUNT.add(ETH_BORROW_AMOUNT), USDC_LP_AMOUNT + USDC_BORROW_AMOUNT, bnMantissa(0), bnMantissa(0), ETH_IS_0, ETH_IS_0);
 		const tokenId = receipt.tokenId;
@@ -220,7 +220,7 @@ contract('ImpermaxV3AeroRouter01', function (accounts) {
 		console.log("usdc borrowed", await borrowable1.borrowBalance(tokenId) / 1e6);
 		
 		await increaseTime(3700); 
-		await nftlp.claim(tokenId, root);
+		await nftlp.claim(root, tokenId);
 		console.log("aero balance", await AERO.balanceOf(root) / 1e18);
 		
 		await collateral.approve(router.address, tokenId, {from: root});

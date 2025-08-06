@@ -34,6 +34,8 @@ contract TokenizedAeroCLPosition is ITokenizedAeroCLPosition, INFTLP, ImpermaxER
 	
 	uint public totalRewardBalance = 0;
 	mapping(uint256 => uint256) public rewardOwed;
+
+	function () external payable {}
 			
 	/*** Global state ***/
 	
@@ -48,7 +50,7 @@ contract TokenizedAeroCLPosition is ITokenizedAeroCLPosition, INFTLP, ImpermaxER
 	) external {
 		require(factory == address(0), "Impermax: FACTORY_ALREADY_SET"); // sufficient check
 		factory = msg.sender;
-		_setName("Tokenized Uniswap V3", "NFT-UNI-V3");
+		_setName("Tokenized Aero CL", "NFT-AERO-CL");
 		clFactory = _clFactory;
 		nfpManager = _nfpManager;
 		oracle = _oracle;
@@ -73,13 +75,30 @@ contract TokenizedAeroCLPosition is ITokenizedAeroCLPosition, INFTLP, ImpermaxER
 		require(gauge != address(0), "TokenizedAeroCLPosition: UNSUPPORTED_TICK_SPACING");
 	}
 	
-	function _updateReward() internal {
-		totalRewardBalance = IERC20(rewardsToken).balanceOf(address(this));
+	function _updateReward(uint256 tokenId) internal {
+		uint256 newTotalRewardBalance = IERC20(rewardsToken).balanceOf(address(this));
+		uint256 newRewardOwed = rewardOwed[tokenId].add(newTotalRewardBalance.sub(totalRewardBalance));
+		totalRewardBalance = newTotalRewardBalance;
+		rewardOwed[tokenId] = newRewardOwed;
+		emit UpdatePositionReward(tokenId, newRewardOwed, 0);
+		emit SyncReward(newTotalRewardBalance);
+	}
+	function _claimReward(uint256 tokenId, address to) internal {
+		uint256 claimAmount = rewardOwed[tokenId];
+		if (claimAmount == 0) return;
+		rewardOwed[tokenId] = 0;
+		TransferHelper.safeTransfer(rewardsToken, to, claimAmount);
+		totalRewardBalance = totalRewardBalance.sub(claimAmount);
+		emit UpdatePositionReward(tokenId, 0, claimAmount);
 		emit SyncReward(totalRewardBalance);
 	}
-	function _getClaimAmount(uint256 tokenId) internal view returns (uint256 claimAmount) {
-		uint256 rewardBalance = IERC20(rewardsToken).balanceOf(address(this));
-		return rewardOwed[tokenId].add(rewardBalance.sub(totalRewardBalance));
+	function _deposit(uint256 tokenId, address gauge) internal {
+		IERC721(nfpManager).approve(gauge, tokenId);
+		ICLGaugeAero(gauge).deposit(tokenId);
+	}
+	function _withdraw(uint256 tokenId, address gauge) internal {
+		ICLGaugeAero(gauge).withdraw(tokenId);
+		_updateReward(tokenId);
 	}
 	
 	function oraclePriceSqrtX96() public returns (uint256) {
@@ -93,9 +112,9 @@ contract TokenizedAeroCLPosition is ITokenizedAeroCLPosition, INFTLP, ImpermaxER
 		INFTLP.RealXYs memory realXYs
 	) {
 		require(safetyMarginSqrt >= 1e18, "TokenizedAeroCLPosition: INVALID_SAFETY_MARGIN");
+		_requireOwnedNfp(tokenId);
 		
 		(,,,,, int24 tickLower, int24 tickUpper, uint128 liquidity) = INonfungiblePositionManagerAero(nfpManager).positions(tokenId);
-		_requireOwnedNfp(tokenId);
 		
 		uint160 pa = tickLower.getSqrtRatioAtTick();
 		uint160 pb = tickUpper.getSqrtRatioAtTick();
@@ -127,72 +146,59 @@ contract TokenizedAeroCLPosition is ITokenizedAeroCLPosition, INFTLP, ImpermaxER
 		require(_token1 == token1, "TokenizedAeroCLPosition: INCOMPATIBLE_POSITION");
 		
 		address gauge = getGauge(tokenId);
-		IERC721(nfpManager).approve(gauge, tokenId);
-		ICLGaugeAero(gauge).deposit(tokenId);
+		_deposit(tokenId, gauge);
 		
 		emit MintPosition(tokenId, tickSpacing, tickLower, tickUpper);
 		emit UpdatePositionLiquidity(tokenId, liquidity);
 	}
 
 	// this low-level function should be called from another contract
-	function redeem(address to, uint256 tokenId) external nonReentrant updateReward {
+	function redeem(address to, uint256 tokenId) external nonReentrant {
 		_checkAuthorized(_requireOwned(tokenId), msg.sender, tokenId);
 		_burn(tokenId);
 		
 		address gauge = getGauge(tokenId);
-		ICLGaugeAero(gauge).withdraw(tokenId);
+		_withdraw(tokenId, gauge);
+		_claimReward(tokenId, to);
 		
-		uint256 claimAmount = _getClaimAmount(tokenId);
-		rewardOwed[tokenId] = 0;
-		if (claimAmount > 0) TransferHelper.safeTransfer(rewardsToken, to, claimAmount);
 		IERC721(nfpManager).safeTransferFrom(address(this), to, tokenId);
 		
 		emit UpdatePositionLiquidity(tokenId, 0);
-		emit UpdatePositionReward(tokenId, 0, claimAmount);
 	}
 	
-	function split(uint256 tokenId, uint256 percentage) external nonReentrant updateReward returns (uint256 newTokenId) {
-		require(percentage <= 1e18, "TokenizedAeroCLPosition: ABOVE_100_PERCENT");
+	function split(uint256 tokenId, uint256 percentage) external nonReentrant returns (uint256 newTokenId) {
+		require(percentage < 1e18 && percentage > 0, "TokenizedAeroCLPosition: ABOVE_100_PERCENT");
 		address owner = _requireOwned(tokenId);
 		_checkAuthorized(owner, msg.sender, tokenId);
 		_approve(address(0), tokenId, address(0)); // reset approval
 		
 		address gauge = getGauge(tokenId);
-		ICLGaugeAero(gauge).withdraw(tokenId);
+		_withdraw(tokenId, gauge);
 		
 		uint128 oldTokenLiquidity; uint128 newTokenLiquidity;
 		(newTokenId, oldTokenLiquidity, newTokenLiquidity) = NfpmAeroInteractions.decreaseAndMint(nfpManager, tokenId, percentage);
 		
-		IERC721(nfpManager).approve(gauge, tokenId);
-		ICLGaugeAero(gauge).deposit(tokenId);
-		IERC721(nfpManager).approve(gauge, newTokenId);
-		ICLGaugeAero(gauge).deposit(newTokenId);
+		_deposit(tokenId, gauge);
+		_deposit(newTokenId, gauge);
 		_mint(owner, newTokenId);
-		
-		uint256 claimAmount = _getClaimAmount(tokenId);
-		rewardOwed[tokenId] = claimAmount;
 		
 		emit SplitPosition(tokenId, newTokenId);
 		emit UpdatePositionLiquidity(tokenId, oldTokenLiquidity);
 		emit UpdatePositionLiquidity(newTokenId, newTokenLiquidity);
-		emit UpdatePositionReward(tokenId, claimAmount, 0);
 	}
 	
-	function increaseLiquidity(uint256 tokenId) external nonReentrant updateReward returns (uint128 liquidity, uint256 amount0, uint256 amount1) {
+	// this low-level function should be called from another contract
+	// uses token0 and token1 available balance to increase the liquidity of the position
+	function increaseLiquidity(uint256 tokenId) external nonReentrant returns (uint128 liquidity, uint256 amount0, uint256 amount1) {
 		address gauge = getGauge(tokenId);
-		ICLGaugeAero(gauge).withdraw(tokenId);
+		_withdraw(tokenId, gauge);
 		
 		uint128 totalLiquidity;
 		(liquidity, totalLiquidity, amount0, amount1) = NfpmAeroInteractions.increase(nfpManager, tokenId);
 			
-		IERC721(nfpManager).approve(gauge, tokenId);
-		ICLGaugeAero(gauge).deposit(tokenId);
-		
-		uint256 claimAmount = _getClaimAmount(tokenId);
-		rewardOwed[tokenId] = claimAmount;
+		_deposit(tokenId, gauge);
 		
 		emit UpdatePositionLiquidity(tokenId, totalLiquidity);
-		emit UpdatePositionReward(tokenId, claimAmount, 0);
 	}
 	
 	// withdraw dust
@@ -203,7 +209,7 @@ contract TokenizedAeroCLPosition is ITokenizedAeroCLPosition, INFTLP, ImpermaxER
 		if (balance1 > 0) TransferHelper.safeTransfer(token1, to, balance1);
 	}
 	
-	/*** Claim Fees ***/
+	/*** Claim Reward ***/
 
 	function _checkAuthorizedCollateral(uint256 tokenId) internal view {
 		// check that the sender is authorized to spend the tokenId of the collateral contract that owns this nft
@@ -214,17 +220,13 @@ contract TokenizedAeroCLPosition is ITokenizedAeroCLPosition, INFTLP, ImpermaxER
 		if (IERC721(collateral).isApprovedForAll(owner, msg.sender)) return;
 		revert("TokenizedAeroCLPosition: UNAUTHORIZED");
 	}
-	function claim(uint256 tokenId, address to) external nonReentrant updateReward returns (uint256 claimAmount) {
+	function claim(address to, uint256 tokenId) external nonReentrant returns (uint256 claimAmount) {
 		_checkAuthorizedCollateral(tokenId);
 		
 		address gauge = getGauge(tokenId);
 		ICLGaugeAero(gauge).getReward(tokenId);
-		
-		claimAmount = _getClaimAmount(tokenId);
-		rewardOwed[tokenId] = 0;
-		if (claimAmount > 0) TransferHelper.safeTransfer(rewardsToken, to, claimAmount);
-		
-		emit UpdatePositionReward(tokenId, 0, claimAmount);
+		_updateReward(tokenId);
+		_claimReward(tokenId, to);
 	}
 	
 	/*** Admin ***/
@@ -245,14 +247,12 @@ contract TokenizedAeroCLPosition is ITokenizedAeroCLPosition, INFTLP, ImpermaxER
 		return bytes4(keccak256("onERC721Received(address,address,uint256,bytes)"));
 	}
 	
-	function _requireOwnedNfp(uint tokenId) internal {
+	function _requireOwnedNfp(uint tokenId) internal view {
 		_requireOwned(tokenId);
 		address owner = IERC721(nfpManager).ownerOf(tokenId);
 		if (owner == address(this)) return;
 		address gauge = getGauge(tokenId);
-		require(owner == gauge);
-		// this will revert if we're not the onwer of the staked token
-		ICLGaugeAero(gauge).earned(address(this), tokenId);
+		require(owner == gauge && ICLGaugeAero(gauge).stakedContains(address(this), tokenId), "TokenizedAeroCLPosition: NOT_OWNED");
 	}
 
 	function safe160(uint n) internal pure returns (uint160) {
@@ -267,11 +267,5 @@ contract TokenizedAeroCLPosition is ITokenizedAeroCLPosition, INFTLP, ImpermaxER
 		_notEntered = false;
 		_;
 		_notEntered = true;
-	}
-	
-	// update totalRewardBalance with current balance
-	modifier updateReward() {
-		_;
-		_updateReward();
 	}
 }
