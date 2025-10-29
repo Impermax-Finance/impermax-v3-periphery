@@ -20,7 +20,10 @@ library Actions {
 		MINT_UNIV3, 
 		REDEEM_UNIV3,
 		BORROW_AND_MINT_UNIV3,
-		MINT_AERO_EMPTY
+		MINT_AERO_EMPTY,
+		SWAP,
+		FLASH_ALLOCATE,
+		SWAP_AND_REPAY
 	}
 	struct Action {
 		Type actionType;
@@ -114,6 +117,22 @@ library Actions {
 		int24 tickSpacing;
 		int24 tickLower;
 		int24 tickUpper;
+	}
+	struct SwapData {
+		uint8 indexOut;
+		uint256 amountOut;
+		uint160 sqrtPriceLimitX96;
+	}
+	struct FlashAllocateData {
+		uint8 index;
+		address vault;
+		uint256 amount;
+	}
+	struct SwapAndRepayData {
+		uint8 index;
+		uint256 amountMax;
+		uint160 sqrtPriceLimitX96;
+		address refundTo;
 	}
 	
 	/*** Actions sorter: sorts actions and composite actions ***/
@@ -289,6 +308,31 @@ library Actions {
 			tickSpacing: tickSpacing,
 			tickLower: tickLower,
 			tickUpper: tickUpper
+		})));
+	}
+	
+	function getSwapAction(uint8 indexOut, uint256 amountOut, uint160 sqrtPriceLimitX96) external pure returns (Action memory) {
+		return _getAction(Type.SWAP, abi.encode(SwapData({
+			indexOut: indexOut,
+			amountOut: amountOut,
+			sqrtPriceLimitX96: sqrtPriceLimitX96
+		})));
+	}
+	
+	function getFlashAllocateAction(uint8 index, address vault, uint256 amount) external pure returns (Action memory) {
+		return _getAction(Type.FLASH_ALLOCATE, abi.encode(FlashAllocateData({
+			index: index,
+			vault: vault,
+			amount: amount
+		})));
+	}
+	
+	function getSwapAndRepayAction(uint8 index, uint256 amountMax, uint160 sqrtPriceLimitX96, address refundTo) external pure returns (Action memory) {
+		return _getAction(Type.SWAP_AND_REPAY, abi.encode(SwapAndRepayData({
+			index: index,
+			amountMax: amountMax,
+			sqrtPriceLimitX96: sqrtPriceLimitX96,
+			refundTo: refundTo
 		})));
 	}
 }

@@ -15,6 +15,7 @@ const Actions = artifacts.require('Actions');
 const ImpermaxPermit = artifacts.require('ImpermaxPermit');
 const UniswapV3Math = artifacts.require('UniswapV3Math');
 const ActionsGetter = artifacts.require('ActionsGetter');
+const ImpermaxV3BaseRouter01Library = artifacts.require('ImpermaxV3BaseRouter01Library');
 const ImpermaxV3UniV2Router01 = artifacts.require('ImpermaxV3UniV2Router01');
 const ImpermaxV3UniV3Router01 = artifacts.require('ImpermaxV3UniV3Router01');
 const ImpermaxV3AeroRouter01 = artifacts.require('ImpermaxV3AeroRouter01');
@@ -36,13 +37,17 @@ const routerManager = {
 		const uniswapV3Math = await UniswapV3Math.new();
 		const nfpmAeroInteractions = await NfpmAeroInteractions.new();
 		await PoolTokenRouter01.link(imperamxPermit);
+		await ImpermaxV3BaseRouter01Library.link(imperamxPermit);
+		const v3BaseLibrary = await ImpermaxV3BaseRouter01Library.new();
 		await ImpermaxV3UniV2Router01.link(imperamxPermit);
 		await ImpermaxV3UniV2Router01.link(actions);
 		await ImpermaxV3UniV3Router01.link(imperamxPermit);
 		await ImpermaxV3UniV3Router01.link(actions);
+		await ImpermaxV3UniV3Router01.link(v3BaseLibrary);
 		await ImpermaxV3UniV3Router01.link(uniswapV3Math);
 		await ImpermaxV3AeroRouter01.link(imperamxPermit);
 		await ImpermaxV3AeroRouter01.link(actions);
+		await ImpermaxV3AeroRouter01.link(v3BaseLibrary);
 		await ImpermaxV3AeroRouter01.link(uniswapV3Math);
 		await ImpermaxV3AeroRouter01.link(nfpmAeroInteractions);
 		await ActionsGetter.link(actions);
@@ -51,14 +56,14 @@ const routerManager = {
 	initializePoolToken: async (wethAddress) => {
 		routerManager.poolToken = await PoolTokenRouter01.new(wethAddress);
 	},
-	initializeUniV2: async (impermaxFactoryAddress, wethAddress) => {
-		routerManager.uniV2 = await ImpermaxV3UniV2Router01.new(impermaxFactoryAddress, wethAddress);
+	initializeUniV2: async (impermaxFactoryAddress, wethAddress, vaultFactoryAddress) => {
+		routerManager.uniV2 = await ImpermaxV3UniV2Router01.new(impermaxFactoryAddress, wethAddress, vaultFactoryAddress);
 	},
-	initializeUniV3: async (impermaxFactoryAddress, uniswapV3FactoryAddress, wethAddress) => {
-		routerManager.uniV3 = await ImpermaxV3UniV3Router01.new(impermaxFactoryAddress, uniswapV3FactoryAddress, wethAddress);
+	initializeUniV3: async (impermaxFactoryAddress, uniswapV3FactoryAddress, wethAddress, vaultFactoryAddress, swapRouterAddress) => {
+		routerManager.uniV3 = await ImpermaxV3UniV3Router01.new(impermaxFactoryAddress, uniswapV3FactoryAddress, wethAddress, vaultFactoryAddress, swapRouterAddress);
 	},
-	initializeAero: async (impermaxFactoryAddress, tokenizedAeroCLFactoryAddress, wethAddress, nextAeroIdGetterAddress) => {
-		routerManager.aero = await ImpermaxV3AeroRouter01.new(impermaxFactoryAddress, tokenizedAeroCLFactoryAddress, wethAddress, nextAeroIdGetterAddress);
+	initializeAero: async (impermaxFactoryAddress, tokenizedAeroCLFactoryAddress, wethAddress, vaultFactoryAddress, nextAeroIdGetterAddress, swapRouterAddress) => {
+		routerManager.aero = await ImpermaxV3AeroRouter01.new(impermaxFactoryAddress, tokenizedAeroCLFactoryAddress, wethAddress, vaultFactoryAddress, nextAeroIdGetterAddress, swapRouterAddress);
 	},
 }
 

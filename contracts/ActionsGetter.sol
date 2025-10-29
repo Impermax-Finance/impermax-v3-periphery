@@ -101,4 +101,16 @@ contract ActionsGetter {
 			amount1Min
 		);
 	}
+	
+	function getSwapAction(uint8 indexOut, uint256 amountOut, uint160 sqrtPriceLimitX96) external pure returns (Actions.Action memory) {
+		return Actions.getSwapAction(indexOut, amountOut, sqrtPriceLimitX96);
+	}
+	
+	function getFlashAllocateAction(uint8 index, address vault, uint256 amount) external pure returns (Actions.Action memory) {
+		return Actions.getFlashAllocateAction(index, vault, amount);
+	}
+	
+	function getSwapAndRepayAction(uint8 index, uint256 amountMax, uint160 sqrtPriceLimitX96, address refundTo) external pure returns (Actions.Action memory) {
+		return Actions.getSwapAndRepayAction(index, amountMax, sqrtPriceLimitX96, refundTo);
+	}
 }

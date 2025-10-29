@@ -46,6 +46,7 @@ const TokenizedAeroCLFactory = artifacts.require('TokenizedAeroCLFactory');
 const TokenizedAeroCLPosition = artifacts.require('TokenizedAeroCLPosition');
 const ImpermaxV3OracleChainlink = artifacts.require('ImpermaxV3OracleChainlink');
 const NextAeroIdGetter = artifacts.require('NextAeroIdGetter');
+const VaultFactory = artifacts.require('ILendingVaultV2Factory');
 
 const WETH9 = artifacts.require('WETH9');
 
@@ -102,6 +103,8 @@ contract('ImpermaxV3AeroRouter01', function (accounts) {
 		const aeroFactory = await ICLFactory.at("0x5e7BB104d84c7CB9B682AaC2F3d509f5F406809A");
 		const oracle = await ImpermaxV3OracleChainlink.at("0x6799246165c8ce1ed2e5cf8c494fa8e7a5de4472");
 		const impermaxFactory = await Factory.at("0x870FD2C2B502db53d3c9E19aB99725c1129fC120");
+		const vaultFactory = await VaultFactory.at("0x77Fb0Ff573Da1eC6EC0Cadb31A8Cf69A4BDd9C8D");
+		const swapRouterAddress = "0xBE6D8f0d05cC4be24d5167a3eF062215bE6D18a5";
 		
 		const TICK_SPACING = 100;
 		const priceA = -250000;
@@ -155,7 +158,7 @@ contract('ImpermaxV3AeroRouter01', function (accounts) {
 		// deploy routers
 		await routerManager.initialize();
 		await routerManager.initializePoolToken(WETH.address);
-		await routerManager.initializeAero(impermaxFactory.address, tokenizedAeroCLFactory.address, WETH.address, nextAeroIdGetter.address);
+		await routerManager.initializeAero(impermaxFactory.address, tokenizedAeroCLFactory.address, WETH.address, vaultFactory.address, nextAeroIdGetter.address, swapRouterAddress);
 		const router = routerManager.aero;
 		const routerLend = routerManager.poolToken;
 		
@@ -174,7 +177,7 @@ contract('ImpermaxV3AeroRouter01', function (accounts) {
 		console.log("usdc balance", await USDC.balanceOf(root) / 1e6);
 		console.log("aero balance", await AERO.balanceOf(root) / 1e18);
 				
-		/* TEST 1 */
+		/* TEST 1 
 		await USDC.approve(router.address, USDC_LP_AMOUNT, {from: root});
 		const receipt = await mintCollateralETHAero(router, nftlp, root, MAX_UINT_256, TICK_SPACING, new BN(priceA), new BN(priceB), ETH_LP_AMOUNT, USDC_LP_AMOUNT, bnMantissa(0), bnMantissa(0), ETH_IS_0, ETH_IS_0);
 		const tokenId = receipt.tokenId;
@@ -201,9 +204,9 @@ contract('ImpermaxV3AeroRouter01', function (accounts) {
 		await increaseTime(3700); 
 		await collateral.approve(router.address, tokenId, {from: root});
 		await redeemCollateralETHAero(router, nftlp, root, tokenId, bnMantissa(1), bnMantissa(0), bnMantissa(0), ETH_IS_0, ETH_IS_0);
+		*/
 		
-		
-		/* TEST 2 
+		/* TEST 2 */
 		await USDC.approve(router.address, USDC_LP_AMOUNT, {from: root});
 		const receipt = await mintAndLeverageETHAero(router, nftlp, root, MAX_UINT_256, TICK_SPACING, new BN(priceA), new BN(priceB), ETH_LP_AMOUNT, USDC_LP_AMOUNT, ETH_LP_AMOUNT.add(ETH_BORROW_AMOUNT), USDC_LP_AMOUNT + USDC_BORROW_AMOUNT, bnMantissa(0), bnMantissa(0), ETH_IS_0, ETH_IS_0);
 		const tokenId = receipt.tokenId;
@@ -240,7 +243,7 @@ contract('ImpermaxV3AeroRouter01', function (accounts) {
 		console.log("aero balance", await AERO.balanceOf(root) / 1e18);
 		console.log("eth borrowed", await borrowable0.borrowBalance(tokenId) / 1e18);
 		console.log("usdc borrowed", await borrowable1.borrowBalance(tokenId) / 1e6);
-		*/
+		
 	});
 	
 });
